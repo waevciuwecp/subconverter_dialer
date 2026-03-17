@@ -146,10 +146,16 @@ static bool parseProxyProviders(const std::string &source, std::vector<ClashProx
     if(source.empty())
         return true;
 
-    std::string content = source;
-    if(strFind(content, "%"))
+    std::string content = trim(source);
+    if(content.empty())
+        return true;
+
+    // libevent path may pass raw query value (%5B...%5D), while httplib path
+    // already gives decoded JSON. Only decode the former to avoid over-decoding
+    // provider URLs that intentionally contain percent-encoded parts.
+    if(startsWith(content, "%5B") || startsWith(content, "%5b") ||
+       startsWith(content, "%7B") || startsWith(content, "%7b"))
         content = urlDecode(content);
-    content = trim(content);
     if(content.empty())
         return true;
 
