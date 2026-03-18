@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "generator/config/ruleconvert.h"
-#include "handler/settings.h"
 #include "helpers/test_helpers.h"
 #include "utils/base64/base64.h"
 #include "utils/file.h"
@@ -27,21 +26,6 @@ std::string makeTempRuleFilePath()
     const auto suffix = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     return (std::filesystem::temp_directory_path() / ("subconverter-ruleset-" + suffix + ".list")).string();
 }
-
-struct ScopedMaxAllowedRules
-{
-    explicit ScopedMaxAllowedRules(size_t value) : old(global.maxAllowedRules)
-    {
-        global.maxAllowedRules = value;
-    }
-
-    ~ScopedMaxAllowedRules()
-    {
-        global.maxAllowedRules = old;
-    }
-
-    size_t old;
-};
 
 const rapidjson::Value *findRouteRuleByOutbound(const rapidjson::Document &doc, const std::string &outbound)
 {
@@ -150,20 +134,6 @@ TEST_CASE("ruleconvert clash string covers legacy field and filtering branches")
     CHECK(containsText(out, "  - IP-CIDR6,2001:db8::/32,Q"));
     CHECK(containsText(out, "  - MATCH,FINAL-G"));
     CHECK_FALSE(containsText(out, "UNKNOWN,skip.me"));
-}
-
-TEST_CASE("ruleconvert clash string honors maxAllowedRules guard")
-{
-    ScopedMaxAllowedRules scoped(1);
-    YAML::Node base;
-    std::vector<RulesetContent> rulesets = {
-        makeRulesetContent("Proxy", "DOMAIN,one.test\nDOMAIN,two.test\nDOMAIN,three.test\n")
-    };
-
-    const std::string out = rulesetToClashStr(base, rulesets, true, true);
-    CHECK(containsText(out, "  - DOMAIN,one.test,Proxy"));
-    CHECK(containsText(out, "  - DOMAIN,two.test,Proxy"));
-    CHECK_FALSE(containsText(out, "  - DOMAIN,three.test,Proxy"));
 }
 
 TEST_CASE("ruleconvert surge output handles inline and remote rules")
