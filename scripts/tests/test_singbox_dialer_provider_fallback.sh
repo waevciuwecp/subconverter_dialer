@@ -68,7 +68,9 @@ ruleset=Proxy,[]DOMAIN,example.com
 custom_proxy_group=dialer-select\`select-use\`(sub-provider|relay-provider)
 custom_proxy_group=dialer-lb\`load-balance-use\`(sub-provider|relay-provider)\`http://www.gstatic.com/generate_204\`6537,,100\`round-robin
 custom_proxy_group=dialer\`select\`[]dialer-select\`[]dialer-lb\`[]DIRECT
-custom_proxy_group=Proxy\`select\`[]awesome-node\`[]plain-node\`[]DIRECT
+custom_proxy_group=auto\`url-test\`.*\`http://www.gstatic.com/generate_204\`300,,50
+custom_proxy_group=failover\`fallback\`.*\`http://www.gstatic.com/generate_204\`300,,100
+custom_proxy_group=Proxy\`select\`[]auto\`[]failover\`[]awesome-node\`[]plain-node\`[]DIRECT
 PREF
 
 cat > "$gen_path" <<GEN
@@ -107,6 +109,21 @@ assert_contains_fixed "$out_path" "\"relay-provider-node\""
 assert_contains_fixed "$out_path" "\"tag\":\"dialer-select\""
 assert_contains_fixed "$out_path" "\"outbounds\":[\"sub-provider-node\",\"relay-provider-node\"]"
 assert_contains_fixed "$out_path" "\"detour\":\"dialer\""
+
+assert_jq_true() {
+  local path="$1"
+  local expr="$2"
+  if ! jq -e "$expr" "$path" >/dev/null; then
+    echo "expected jq expression to be true for $path: $expr" >&2
+    exit 1
+  fi
+}
+
+# Provider nodes should stay inside provider-scoped dialer groups only.
+assert_jq_true "$out_path" '.outbounds[] | select(.tag == "auto") | (.outbounds | index("sub-provider-node") == null and index("relay-provider-node") == null)'
+assert_jq_true "$out_path" '.outbounds[] | select(.tag == "failover") | (.outbounds | index("sub-provider-node") == null and index("relay-provider-node") == null)'
+assert_jq_true "$out_path" '.outbounds[] | select(.tag == "dialer-select") | (.outbounds | index("sub-provider-node") != null and index("relay-provider-node") != null)'
+assert_jq_true "$out_path" '.outbounds[] | select(.tag == "dialer-lb") | (.outbounds | index("sub-provider-node") != null and index("relay-provider-node") != null)'
 
 detour_count="$(rg -o --fixed-strings '"detour":"dialer"' "$out_path" | wc -l | tr -d ' ')"
 if [[ "$detour_count" != "1" ]]; then

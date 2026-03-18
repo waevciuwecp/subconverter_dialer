@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <iostream>
 #include <numeric>
+#include <limits>
 #include <cmath>
 #include <climits>
 #include <sstream>
@@ -193,6 +194,8 @@ void processRemark(std::string &remark, const string_array &remarks_list, bool p
     remark = tempRemark;
 }
 
+static constexpr uint32_t kSingBoxProviderFallbackGroupId = std::numeric_limits<uint32_t>::max();
+
 static string_array resolveUsingProviders(const ProxyGroupConfig &group, const extra_settings &ext)
 {
     string_array providers = group.UsingProvider;
@@ -306,7 +309,7 @@ static void appendProviderNodesForSingBox(const ProxyGroupConfigs &groups, std::
         {
             // Remap to provider name so provider filter rules can resolve via !!GROUP matcher.
             node.Group = provider_name;
-            node.GroupId = 0;
+            node.GroupId = kSingBoxProviderFallbackGroupId;
         }
         std::move(provider_nodes.begin(), provider_nodes.end(), std::back_inserter(nodes));
     }
@@ -3017,7 +3020,9 @@ proxyToSingBox(std::vector<Proxy> &nodes, rapidjson::Document &json,
     rapidjson::Document::AllocatorType &allocator = json.GetAllocator();
     rapidjson::Value outbounds(rapidjson::kArrayType), route(rapidjson::kArrayType);
     std::vector<Proxy> nodelist;
+    std::vector<Proxy> nodelist_without_provider_fallback;
     string_array remarks_list;
+    string_array remarks_list_without_provider_fallback;
     std::string search = " Mbps";
 
     if (!ext.nodelist) {
@@ -3391,6 +3396,10 @@ proxyToSingBox(std::vector<Proxy> &nodes, rapidjson::Document &json,
             proxy.AddMember("detour", rapidjson::Value(x.UnderlyingProxy.c_str(), allocator), allocator);
         }
         nodelist.push_back(x);
+        if (x.GroupId != kSingBoxProviderFallbackGroupId) {
+            nodelist_without_provider_fallback.push_back(x);
+            remarks_list_without_provider_fallback.emplace_back(x.Remark);
+        }
         remarks_list.emplace_back(x.Remark);
         outbounds.PushBack(proxy, allocator);
     }
@@ -3403,6 +3412,8 @@ proxyToSingBox(std::vector<Proxy> &nodes, rapidjson::Document &json,
     for (const ProxyGroupConfig &x: extra_proxy_group) {
         string_array filtered_nodelist;
         std::string type;
+        const bool provider_scoped = !x.UsingProvider.empty() || !x.ProviderFilterRules.empty();
+        std::vector<Proxy> &group_nodelist = provider_scoped ? nodelist : nodelist_without_provider_fallback;
         switch (x.Type) {
             case ProxyGroupType::Select: {
                 type = "selector";
@@ -3418,8 +3429,8 @@ proxyToSingBox(std::vector<Proxy> &nodes, rapidjson::Document &json,
                 continue;
         }
         for (const auto &y: x.Proxies)
-            groupGenerate(y, nodelist, filtered_nodelist, true, ext);
-        if (!x.UsingProvider.empty() || !x.ProviderFilterRules.empty())
+            groupGenerate(y, group_nodelist, filtered_nodelist, true, ext);
+        if (provider_scoped)
             groupGenerateFromProviders(x, nodelist, filtered_nodelist, ext);
 
         if (filtered_nodelist.empty())
@@ -3452,7 +3463,7 @@ proxyToSingBox(std::vector<Proxy> &nodes, rapidjson::Document &json,
         global_group.AddMember("tag", "GLOBAL", allocator);
         global_group.AddMember("outbounds", rapidjson::Value(rapidjson::kArrayType), allocator);
         global_group["outbounds"].PushBack("DIRECT", allocator);
-        for (auto &x: remarks_list) {
+        for (auto &x: remarks_list_without_provider_fallback) {
             global_group["outbounds"].PushBack(rapidjson::Value(x.c_str(), allocator), allocator);
         }
         outbounds.PushBack(global_group, allocator);
