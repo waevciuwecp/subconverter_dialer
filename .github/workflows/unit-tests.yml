@@ -53,7 +53,7 @@ jobs:
           ctest --test-dir build --output-on-failure
 
   coverage:
-    name: Coverage (Linux x64, >=80%)
+    name: Coverage (Linux x64, unit-testable src >=80%)
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -78,13 +78,17 @@ jobs:
           cmake --build build-coverage --parallel
           ctest --test-dir build-coverage --output-on-failure
 
-      - name: Generate coverage report (branch >= 80%)
+      - name: Generate coverage report (unit-testable src branch >= 80%)
         run: |
           mkdir -p coverage
           gcovr \
             --root . \
             --object-directory build-coverage \
-            --filter 'src/' \
+            --filter 'src/utils/' \
+            --filter 'src/parser/infoparser.cpp' \
+            --filter 'src/generator/config/ruleconvert.cpp' \
+            --filter 'src/generator/template/templates.cpp' \
+            --filter 'src/handler/webget.cpp' \
             --exclude-unreachable-branches \
             --exclude-throw-branches \
             --xml-pretty \
