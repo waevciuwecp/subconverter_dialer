@@ -288,7 +288,7 @@ enhanced-mode-by-rule = true
             },
             {
                 "tag": "dns_direct",
-                "address": "h3://dns.alidns.com/dns-query",
+                "address": "https://dns.alidns.com/dns-query",
                 "address_resolver": "dns_resolver",
                 "detour": "DIRECT"
             },
