@@ -44,12 +44,18 @@ set(SUBCONVERTER_UNIT_TEST_SOURCES
     test_network.cpp
     test_regexp.cpp
     test_ruleconvert.cpp
+    test_settings.cpp
+    test_settings_stubs.cpp
     test_string.cpp
+    test_subexport_nodemanip.cpp
+    test_template_jinja2.cpp
+    test_templates.cpp
     test_urlencode.cpp
+    test_webget.cpp
 )
 
 add_executable(subconverter_unit_tests ${SUBCONVERTER_UNIT_TEST_SOURCES})
-target_link_libraries(subconverter_unit_tests PRIVATE ${BUILD_TARGET_NAME} doctest::doctest)
+target_link_libraries(subconverter_unit_tests PRIVATE ${BUILD_TARGET_NAME} doctest::doctest ${CURL_LIBRARIES})
 target_include_directories(subconverter_unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(subconverter_unit_tests PRIVATE ${RAPIDJSON_INCLUDE_DIRS} ${YAML_CPP_INCLUDE_DIRS})
 target_compile_definitions(subconverter_unit_tests PRIVATE -DNO_JS_RUNTIME -DNO_WEBGET)

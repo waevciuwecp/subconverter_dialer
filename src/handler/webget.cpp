@@ -5,7 +5,10 @@
 #include <thread>
 #include <atomic>
 
+#ifndef NO_WEBGET
 #include <curl/curl.h>
+#include "version.h"
+#endif
 
 #include "handler/settings.h"
 #include "utils/base64/base64.h"
@@ -14,7 +17,6 @@
 #include "utils/lock.h"
 #include "utils/logger.h"
 #include "utils/urlencode.h"
-#include "version.h"
 #include "webget.h"
 
 #ifdef _WIN32
@@ -30,6 +32,7 @@ std::mutex cache_rw_lock;
 
 RWLock cache_rw_lock;
 
+#ifndef NO_WEBGET
 //std::string user_agent_str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36";
 static auto user_agent_str = "subconverter/" VERSION " cURL/" LIBCURL_VERSION;
 
@@ -275,6 +278,21 @@ static int curlGet(const FetchArgument &argument, FetchResult &result)
 
     return *result.status_code;
 }
+#else
+static int curlGet(const FetchArgument &argument, FetchResult &result)
+{
+    (void)argument;
+    if(result.status_code)
+        *result.status_code = 0;
+    if(result.content)
+        result.content->clear();
+    if(result.response_headers)
+        result.response_headers->clear();
+    if(result.cookies)
+        result.cookies->clear();
+    return result.status_code ? *result.status_code : 0;
+}
+#endif // NO_WEBGET
 
 // data:[<mediatype>][;base64],<data>
 static std::string dataGet(const std::string &url)

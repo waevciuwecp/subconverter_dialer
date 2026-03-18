@@ -17,7 +17,7 @@ jobs:
     name: Unit Tests (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - os: ubuntu-24.04
@@ -53,7 +53,7 @@ jobs:
           ctest --test-dir build --output-on-failure
 
   coverage:
-    name: Coverage (Linux x64, >=60%)
+    name: Coverage (Linux x64, >=80%)
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -78,7 +78,7 @@ jobs:
           cmake --build build-coverage --parallel
           ctest --test-dir build-coverage --output-on-failure
 
-      - name: Generate coverage report (branch >= 60%)
+      - name: Generate coverage report (branch >= 80%)
         run: |
           mkdir -p coverage
           gcovr \
@@ -91,7 +91,7 @@ jobs:
             --output coverage/coverage.xml \
             --txt coverage/coverage.txt \
             --print-summary \
-            --fail-under-branch 60
+            --fail-under-branch 80
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4

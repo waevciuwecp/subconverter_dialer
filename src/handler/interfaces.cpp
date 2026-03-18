@@ -992,12 +992,14 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
         lExcludeRemarks = string_array{argExcludeRemark};
 
     /// initialize script runtime
+#ifndef NO_JS_RUNTIME
     if (authorized && !global.scriptCleanContext) {
         ext.js_runtime = new qjs::Runtime();
         script_runtime_init(*ext.js_runtime);
         ext.js_context = new qjs::Context(*ext.js_runtime);
         script_context_init(*ext.js_context);
     }
+#endif // NO_JS_RUNTIME
 
     //start parsing urls
     RegexMatchConfigs stream_temp = safe_get_streams(), time_temp = safe_get_times();
@@ -1016,8 +1018,10 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
     parse_set.sub_info = &subInfo;
     parse_set.authorized = authorized;
     parse_set.request_header = &request.headers;
+#ifndef NO_JS_RUNTIME
     parse_set.js_runtime = ext.js_runtime;
     parse_set.js_context = ext.js_context;
+#endif // NO_JS_RUNTIME
 
     if (!global.insertUrls.empty() && argEnableInsert) {
         groupID = -1;
@@ -1111,6 +1115,7 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
             }
         }
         */
+#ifndef NO_JS_RUNTIME
         script_safe_runner(ext.js_runtime, ext.js_context, [&](qjs::Context &ctx) {
             try {
                 ctx.eval(filterScript);
@@ -1120,6 +1125,9 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
                 script_print_stack(ctx);
             }
         }, global.scriptCleanContext);
+#else
+        writeLog(0, "Filter script is ignored because JS runtime is disabled.", LOG_LEVEL_WARNING);
+#endif // NO_JS_RUNTIME
     }
 
     //check custom group name
