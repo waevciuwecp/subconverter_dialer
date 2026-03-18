@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "generator/config/ruleconvert.h"
-#include "handler/settings.h"
 #include "helpers/test_helpers.h"
 #include "utils/base64/base64.h"
 #include "utils/file.h"
@@ -43,14 +42,6 @@ const rapidjson::Value *findRouteRuleByOutbound(const rapidjson::Document &doc, 
     return nullptr;
 }
 
-struct ClashModeGuard
-{
-    bool old_value = global.singBoxAddClashModes;
-    ~ClashModeGuard()
-    {
-        global.singBoxAddClashModes = old_value;
-    }
-};
 } // namespace
 
 TEST_CASE("ruleconvert converts QuanX types into common format")
@@ -180,9 +171,6 @@ TEST_CASE("ruleconvert surge quanx branch rewrites ip-cidr6 and strips unsupport
 
 TEST_CASE("ruleconvert sing-box skips deprecated db rules on 1.12+")
 {
-    ClashModeGuard guard;
-    global.singBoxAddClashModes = false;
-
     rapidjson::Document doc;
     doc.SetObject();
     std::vector<RulesetContent> rulesets = {
@@ -224,9 +212,6 @@ TEST_CASE("ruleconvert sing-box skips deprecated db rules on 1.12+")
 
 TEST_CASE("ruleconvert sing-box keeps deprecated db rules before 1.12")
 {
-    ClashModeGuard guard;
-    global.singBoxAddClashModes = false;
-
     rapidjson::Document doc;
     doc.SetObject();
     std::vector<RulesetContent> rulesets = {
