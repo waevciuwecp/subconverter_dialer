@@ -23,7 +23,8 @@ out_v111="$tmp_dir/singbox_v111.json"
 out_v114="$tmp_dir/singbox_v114.json"
 
 ss_link_1='ss://YWVzLTEyOC1nY206cHdk@1.1.1.1:8388#awesome-node'
-ss_link_2='ss://YWVzLTEyOC1nY206cHdk@2.2.2.2:8388#plain-node'
+ss_link_2='ss://YWVzLTEyOC1nY206cHdk@2.2.2.2:8388#relay-node'
+ss_link_3='ss://YWVzLTEyOC1nY206cHdk@3.3.3.3:8388#plain-node'
 
 cat > "$pref_path" <<PREF
 [common]
@@ -40,6 +41,9 @@ overwrite_original_rules=true
 ruleset=Proxy,[]DOMAIN,example.com
 
 [proxy_groups]
+custom_proxy_group=dialer-select\`select-use\`(sub|relay)
+custom_proxy_group=dialer-lb\`load-balance-use\`(sub|relay)\`http://www.gstatic.com/generate_204\`6537,,100\`round-robin
+custom_proxy_group=dialer\`select\`[]dialer-select\`[]dialer-lb\`[]DIRECT
 custom_proxy_group=Proxy\`select\`[]awesome-node\`[]plain-node\`[]DIRECT
 PREF
 
@@ -48,7 +52,7 @@ cat > "$gen_path" <<GEN
 path=$out_v111
 target=singbox
 ver=1.11.0
-url=$ss_link_1|$ss_link_2
+url=tag:sub,$ss_link_1|tag:relay,$ss_link_2|tag:other,$ss_link_3
 use_dialer=true
 dialer_group_name=dialer
 apply_dialer_to=awesome
@@ -57,7 +61,7 @@ apply_dialer_to=awesome
 path=$out_v114
 target=singbox
 singbox_ver=1.14.0
-url=$ss_link_1|$ss_link_2
+url=tag:sub,$ss_link_1|tag:relay,$ss_link_2|tag:other,$ss_link_3
 use_dialer=true
 dialer_group_name=dialer
 apply_dialer_to=awesome
@@ -100,6 +104,8 @@ assert_non_empty "$out_v114"
 
 assert_contains_fixed "$out_v111" "\"awesome-node\""
 assert_contains_fixed "$out_v114" "\"awesome-node\""
+assert_contains_fixed "$out_v111" "\"relay-node\""
+assert_contains_fixed "$out_v114" "\"relay-node\""
 assert_contains_fixed "$out_v111" "\"detour\":\"dialer\""
 assert_contains_fixed "$out_v114" "\"detour\":\"dialer\""
 
@@ -116,5 +122,9 @@ fi
 
 assert_contains_fixed "$out_v111" "\"action\":\"route\""
 assert_contains_fixed "$out_v114" "\"action\":\"route\""
+assert_contains_fixed "$out_v111" "\"tag\":\"dialer-select\""
+assert_contains_fixed "$out_v114" "\"tag\":\"dialer-select\""
+assert_contains_fixed "$out_v111" "\"outbounds\":[\"awesome-node\",\"relay-node\"]"
+assert_contains_fixed "$out_v114" "\"outbounds\":[\"awesome-node\",\"relay-node\"]"
 
 echo "PASS: singbox dialer and versioned route action behavior is correct"

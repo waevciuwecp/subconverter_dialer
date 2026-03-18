@@ -207,6 +207,39 @@ static string_array resolveUsingProviders(const ProxyGroupConfig &group, const e
     return providers;
 }
 
+void groupGenerate(const std::string &rule, std::vector<Proxy> &nodelist, string_array &filtered_nodelist,
+                   bool add_direct, extra_settings &ext);
+
+static std::string escapeRegexPattern(const std::string &src)
+{
+    static const std::string chars = R"(\.^$|()[]{}*+?)";
+    std::string escaped;
+    escaped.reserve(src.size() * 2);
+    for(const char ch : src)
+    {
+        if(chars.find(ch) != std::string::npos)
+            escaped.push_back('\\');
+        escaped.push_back(ch);
+    }
+    return escaped;
+}
+
+static void groupGenerateFromProviders(const ProxyGroupConfig &group, std::vector<Proxy> &nodelist,
+                                       string_array &filtered_nodelist, extra_settings &ext)
+{
+    const string_array providers = resolveUsingProviders(group, ext);
+    for(const std::string &provider : providers)
+    {
+        // Sing-box has no proxy-provider object. Resolve provider names to source groups.
+        groupGenerate("!!GROUP=^" + escapeRegexPattern(provider) + "$", nodelist, filtered_nodelist, false, ext);
+    }
+    for(const std::string &rule : group.ProviderFilterRules)
+    {
+        // Keep provider-style regex semantics by mapping filter rules to source groups.
+        groupGenerate("!!GROUP=" + rule, nodelist, filtered_nodelist, false, ext);
+    }
+}
+
 void
 groupGenerate(const std::string &rule, std::vector<Proxy> &nodelist, string_array &filtered_nodelist, bool add_direct,
               extra_settings &ext) {
@@ -3068,6 +3101,8 @@ proxyToSingBox(std::vector<Proxy> &nodes, rapidjson::Document &json,
         }
         for (const auto &y: x.Proxies)
             groupGenerate(y, nodelist, filtered_nodelist, true, ext);
+        if (!x.UsingProvider.empty() || !x.ProviderFilterRules.empty())
+            groupGenerateFromProviders(x, nodelist, filtered_nodelist, ext);
 
         if (filtered_nodelist.empty())
             filtered_nodelist.emplace_back("DIRECT");
