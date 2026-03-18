@@ -3237,7 +3237,8 @@ std::string proxyToSingBox(std::vector<Proxy> &nodes, const std::string &base_co
     if (ext.nodelist || !ext.enable_rule_generator)
         return json | SerializeObject();
 
-    rulesetToSingBox(json, ruleset_content_array, ext.overwrite_original_rules, ext.singbox_use_route_action);
+    rulesetToSingBox(json, ruleset_content_array, ext.overwrite_original_rules, ext.singbox_use_route_action,
+                     ext.singbox_version);
 
     return json | SerializeObject();
 }

@@ -19,6 +19,36 @@ string_array QuanXRuleTypes = {basic_types, "USER-AGENT", "HOST", "HOST-SUFFIX",
 string_array SurfRuleTypes = {basic_types, "IP-CIDR6", "PROCESS-NAME", "IN-PORT", "DEST-PORT", "SRC-IP"};
 string_array SingBoxRuleTypes = {basic_types, "IP-VERSION", "INBOUND", "PROTOCOL", "NETWORK", "GEOSITE", "SRC-GEOIP", "DOMAIN-REGEX", "PROCESS-NAME", "PROCESS-PATH", "PACKAGE-NAME", "PORT", "PORT-RANGE", "SRC-PORT", "SRC-PORT-RANGE", "USER", "USER-ID"};
 
+static bool singBoxVerGreaterEqual(const std::string &src_ver, const std::string &target_ver)
+{
+    std::istringstream src_stream(src_ver), target_stream(target_ver);
+    int src_part = 0, target_part = 0;
+    char dot = '.';
+    while(src_stream >> src_part)
+    {
+        if(target_stream >> target_part)
+        {
+            if(src_part < target_part)
+                return false;
+            if(src_part > target_part)
+                return true;
+            src_stream >> dot;
+            target_stream >> dot;
+        }
+        else
+            return true;
+    }
+    return !bool(target_stream >> target_part);
+}
+
+static bool isDeprecatedSingBoxDatabaseRuleType(const std::string &type)
+{
+    std::string normalized = toLower(type);
+    normalized = replaceAllDistinct(normalized, "-", "_");
+    normalized = replaceAllDistinct(normalized, "src_", "source_");
+    return normalized == "geoip" || normalized == "source_geoip" || normalized == "geosite";
+}
+
 std::string convertRuleset(const std::string &content, int type)
 {
     /// Target: Surge type,pattern[,flag]
@@ -516,7 +546,9 @@ static rapidjson::Value transformRuleToSingBox(std::vector<std::string_view> &ar
     return rule_obj;
 }
 
-static void appendSingBoxRule(std::vector<std::string_view> &args, rapidjson::Value &rules, const std::string& rule, rapidjson::MemoryPoolAllocator<>& allocator)
+static void appendSingBoxRule(std::vector<std::string_view> &args, rapidjson::Value &rules, const std::string &rule,
+                              rapidjson::MemoryPoolAllocator<> &allocator,
+                              bool skip_deprecated_database_rules, const std::string &singbox_version)
 {
     using namespace rapidjson_ext;
     args.clear();
@@ -529,21 +561,31 @@ static void appendSingBoxRule(std::vector<std::string_view> &args, rapidjson::Va
     if (none_of(SingBoxRuleTypes, [&](const std::string& t){ return type == t; }))
         return;
 
+    if(skip_deprecated_database_rules && isDeprecatedSingBoxDatabaseRuleType(std::string(type)))
+    {
+        writeLog(0, "Skip deprecated sing-box database rule for " + singbox_version + ": " + rule, LOG_LEVEL_WARNING);
+        return;
+    }
+
     auto realType = toLower(std::string(type));
     auto value = toLower(std::string(args[1]));
     realType = replaceAllDistinct(realType, "-", "_");
+    realType = replaceAllDistinct(realType, "src_", "source_");
     realType = replaceAllDistinct(realType, "ip_cidr6", "ip_cidr");
 
     rules | AppendToArray(realType.c_str(), rapidjson::Value(value.c_str(), value.size(), allocator), allocator);
 }
 
-void rulesetToSingBox(rapidjson::Document &base_rule, std::vector<RulesetContent> &ruleset_content_array, bool overwrite_original_rules, bool use_route_action)
+void rulesetToSingBox(rapidjson::Document &base_rule, std::vector<RulesetContent> &ruleset_content_array,
+                      bool overwrite_original_rules, bool use_route_action,
+                      const std::string &singbox_version)
 {
     using namespace rapidjson_ext;
     std::string rule_group, retrieved_rules, strLine, final;
     std::stringstream strStrm;
     size_t total_rules = 0;
     auto &allocator = base_rule.GetAllocator();
+    const bool skip_deprecated_database_rules = singBoxVerGreaterEqual(singbox_version, "1.12.0");
 
     rapidjson::Value rules(rapidjson::kArrayType);
     if (!overwrite_original_rules)
@@ -588,6 +630,15 @@ void rulesetToSingBox(rapidjson::Document &base_rule, std::vector<RulesetContent
                 final = rule_group;
                 continue;
             }
+            temp.clear();
+            split(temp, strLine, ',');
+            if(temp.size() >= 2 && skip_deprecated_database_rules &&
+               isDeprecatedSingBoxDatabaseRuleType(std::string(temp[0])))
+            {
+                writeLog(0, "Skip deprecated sing-box database rule for " + singbox_version + ": " + strLine,
+                         LOG_LEVEL_WARNING);
+                continue;
+            }
             rules.PushBack(transformRuleToSingBox(temp, strLine, rule_group, allocator), allocator);
             total_rules++;
             continue;
@@ -614,7 +665,7 @@ void rulesetToSingBox(rapidjson::Document &base_rule, std::vector<RulesetContent
                 strLine.erase(strLine.find("//"));
                 strLine = trimWhitespace(strLine);
             }
-            appendSingBoxRule(temp, rule, strLine, allocator);
+            appendSingBoxRule(temp, rule, strLine, allocator, skip_deprecated_database_rules, singbox_version);
         }
         if (rule.ObjectEmpty()) continue;
         if(use_route_action)
