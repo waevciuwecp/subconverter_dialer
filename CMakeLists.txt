@@ -147,10 +147,8 @@ IF(SUBCONVERTER_BUILD_TESTS)
         src/lib/wrapper.cpp
         src/parser/infoparser.cpp
         src/utils/base64/base64.cpp
-        src/utils/codepage.cpp
         src/utils/file.cpp
         src/utils/logger.cpp
-        src/utils/md5/md5.cpp
         src/utils/network.cpp
         src/utils/regexp.cpp
         src/utils/string.cpp
