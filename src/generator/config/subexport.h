@@ -52,6 +52,7 @@ struct extra_settings
     std::string clash_proxies_style = "flow";
     std::string clash_proxy_groups_style = "flow";
     std::vector<ClashProxyProviderConfig> clash_proxy_providers;
+    std::string provider_fetch_user_agent;
     std::string singbox_version = "1.11.0";
     bool singbox_use_route_action = true;
     bool authorized = false;

@@ -217,6 +217,21 @@ static bool parseProxyProviders(const std::string &source, std::vector<ClashProx
     return true;
 }
 
+static std::string resolveProviderFetchUserAgent(const string_multimap &argument, const string_icase_map &headers)
+{
+    std::string query_ua = getUrlArg(argument, "user-agent");
+    if(query_ua.empty())
+        query_ua = getUrlArg(argument, "ua");
+    if(!query_ua.empty())
+        return query_ua;
+
+    auto header_it = headers.find("User-Agent");
+    if(header_it != headers.end() && !header_it->second.empty())
+        return header_it->second;
+
+    return "";
+}
+
 static bool looksLikeQueryString(std::string query)
 {
     if(query.empty() || query.find('\0') != std::string::npos)
@@ -848,6 +863,7 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
     ext.quanx_dev_id = !argDeviceID.empty() ? argDeviceID : global.quanXDevID;
     ext.enable_rule_generator = global.enableRuleGen;
     ext.overwrite_original_rules = global.overwriteOriginalRules;
+    ext.provider_fetch_user_agent = resolveProviderFetchUserAgent(argument, request.headers);
     if (!argExpandRulesets)
         ext.managed_config_prefix = global.managedConfigPrefix;
 

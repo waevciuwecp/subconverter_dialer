@@ -4,6 +4,7 @@
 #include <cmath>
 #include <climits>
 #include <sstream>
+#include <curl/curlver.h>
 
 #include "config/regmatch.h"
 #include "generator/config/subexport.h"
@@ -279,8 +280,10 @@ static void appendProviderNodesForSingBox(const ProxyGroupConfigs &groups, std::
             continue;
 
         string_icase_map request_headers;
-        // Some upstream provider endpoints reject empty User-Agent and return 5xx.
-        request_headers["User-Agent"] = "curl/8.7.1";
+        if(!ext.provider_fetch_user_agent.empty())
+            request_headers["User-Agent"] = ext.provider_fetch_user_agent;
+        else
+            request_headers["User-Agent"] = "curl/" LIBCURL_VERSION;
         std::string provider_content = webGet(provider_it->Url, "", global.cacheSubscription, nullptr,
                                               &request_headers, true);
         if(provider_content.empty())
