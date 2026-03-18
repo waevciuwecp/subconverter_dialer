@@ -1,0 +1,137 @@
+name: Unit Tests
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Unit Tests (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64
+          - os: macos-14
+            target: macos-arm64
+          - os: windows-latest
+            target: windows-x64
+            msystem: MINGW64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config g++ \
+            libyaml-cpp-dev libpcre2-dev rapidjson-dev libcurl4-openssl-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install cmake ninja pkg-config yaml-cpp pcre2 rapidjson curl
+
+      - name: Setup MSYS2 (Windows x64)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          msystem: ${{ matrix.msystem }}
+          install: >-
+            base-devel
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-yaml-cpp
+            mingw-w64-x86_64-pcre2
+            mingw-w64-x86_64-rapidjson
+            mingw-w64-x86_64-curl
+
+      - name: Configure + Build + Test (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DBUILD_STATIC_LIBRARY=ON \
+            -DSUBCONVERTER_BUILD_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
+
+      - name: Configure + Build + Test (Windows x64)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DBUILD_STATIC_LIBRARY=ON \
+            -DSUBCONVERTER_BUILD_TESTS=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure
+
+  coverage:
+    name: Coverage (Linux x64, >=60%)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config gcc g++ gcovr \
+            libyaml-cpp-dev libpcre2-dev rapidjson-dev libcurl4-openssl-dev
+
+      - name: Configure + Build + Test with coverage
+        run: |
+          cmake -S . -B build-coverage -G Ninja \
+            -DBUILD_STATIC_LIBRARY=ON \
+            -DSUBCONVERTER_BUILD_TESTS=ON \
+            -DSUBCONVERTER_ENABLE_COVERAGE=ON \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=gcc \
+            -DCMAKE_CXX_COMPILER=g++
+          cmake --build build-coverage --parallel
+          ctest --test-dir build-coverage --output-on-failure
+
+      - name: Generate coverage report (line >= 60%)
+        run: |
+          mkdir -p coverage
+          gcovr \
+            --root . \
+            --object-directory build-coverage \
+            --filter 'src/utils/string\.cpp$' \
+            --filter 'src/utils/base64/base64\.cpp$' \
+            --filter 'src/utils/urlencode\.cpp$' \
+            --filter 'src/utils/regexp\.cpp$' \
+            --filter 'src/utils/network\.cpp$' \
+            --filter 'src/utils/file\.cpp$' \
+            --filter 'src/parser/infoparser\.cpp$' \
+            --xml-pretty \
+            --output coverage/coverage.xml \
+            --txt coverage/coverage.txt \
+            --print-summary \
+            --fail-under-line 60
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
