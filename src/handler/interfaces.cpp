@@ -1,8 +1,11 @@
 #include <iostream>
+#include <algorithm>
+#include <cctype>
 #include <string>
 #include <mutex>
 #include <numeric>
 #include <unordered_set>
+#include <zlib.h>
 
 #include <inja.hpp>
 #include <yaml-cpp/yaml.h>
@@ -194,6 +197,151 @@ static bool parseProxyProviders(const std::string &source, std::vector<ClashProx
             provider.Interval = 3600;
         if(names.emplace(provider.Name).second)
             providers.emplace_back(std::move(provider));
+    }
+    return true;
+}
+
+static bool looksLikeQueryString(std::string query)
+{
+    if(query.empty() || query.find('\0') != std::string::npos)
+        return false;
+    if(startsWith(query, "?"))
+        query.erase(0, 1);
+    if(query.empty() || query.find('=') == std::string::npos)
+        return false;
+    std::string first_token = query.substr(0, query.find('&'));
+    std::string::size_type eq_pos = first_token.find('=');
+    if(eq_pos == std::string::npos || eq_pos == 0)
+        return false;
+    return std::all_of(first_token.begin(), first_token.begin() + eq_pos, [](unsigned char ch)
+    {
+        return std::isalnum(ch) || ch == '_' || ch == '-' || ch == '.';
+    });
+}
+
+static bool isLikelyBase64Text(const std::string &content)
+{
+    if(content.empty())
+        return false;
+    return std::all_of(content.begin(), content.end(), [](unsigned char ch)
+    {
+        return std::isalnum(ch) || ch == '+' || ch == '/' || ch == '=' || ch == '-' || ch == '_' || ch == ' ';
+    });
+}
+
+static bool inflateData(const std::string &input, int window_bits, std::string &output)
+{
+    if(input.empty())
+        return false;
+    constexpr size_t max_query_size = 256 * 1024;
+    z_stream stream {};
+    stream.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(input.data()));
+    stream.avail_in = static_cast<uInt>(input.size());
+    if(inflateInit2(&stream, window_bits) != Z_OK)
+        return false;
+
+    int ret = Z_OK;
+    output.clear();
+    char buffer[4096];
+    while(ret == Z_OK)
+    {
+        stream.next_out = reinterpret_cast<Bytef*>(buffer);
+        stream.avail_out = sizeof(buffer);
+        ret = inflate(&stream, Z_NO_FLUSH);
+        if(ret != Z_OK && ret != Z_STREAM_END)
+        {
+            inflateEnd(&stream);
+            output.clear();
+            return false;
+        }
+        output.append(buffer, sizeof(buffer) - stream.avail_out);
+        if(output.size() > max_query_size)
+        {
+            inflateEnd(&stream);
+            output.clear();
+            return false;
+        }
+    }
+    inflateEnd(&stream);
+    return ret == Z_STREAM_END;
+}
+
+static bool inflatePackedQuery(const std::string &packed, std::string &query)
+{
+    for(const int window_bits : {47, 15, -15}) // zlib/gzip auto, zlib, raw deflate
+    {
+        if(inflateData(packed, window_bits, query))
+            return true;
+    }
+    return false;
+}
+
+static bool decodePackedQuery(const std::string &packed, std::string &query)
+{
+    std::string content = packed;
+    if(strFind(content, "%"))
+        content = urlDecode(content);
+    if(startsWith(content, "?"))
+        content.erase(0, 1);
+    if(looksLikeQueryString(content))
+    {
+        query = content;
+        return true;
+    }
+
+    std::string inflated;
+    if(inflatePackedQuery(content, inflated) && looksLikeQueryString(inflated))
+    {
+        query = inflated;
+        return true;
+    }
+
+    std::string normalized = replaceAllDistinct(content, " ", "+");
+    for(const std::string &candidate : {content, normalized})
+    {
+        if(!isLikelyBase64Text(candidate))
+            continue;
+        std::string decoded = base64Decode(candidate, true);
+        if(looksLikeQueryString(decoded))
+        {
+            query = decoded;
+            return true;
+        }
+        if(inflatePackedQuery(decoded, inflated) && looksLikeQueryString(inflated))
+        {
+            query = inflated;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool mergePackedQueryArguments(string_multimap &argument)
+{
+    std::string packed_query = getUrlArg(argument, "q");
+    if(packed_query.empty())
+        return false;
+
+    std::string query;
+    if(!decodePackedQuery(packed_query, query))
+        return false;
+
+    if(startsWith(query, "?"))
+        query.erase(0, 1);
+    string_array entries = split(query, "&");
+    for(const std::string &entry : entries)
+    {
+        if(entry.empty())
+            continue;
+        std::string::size_type eq_pos = entry.find('=');
+        std::string key = eq_pos == std::string::npos ? entry : entry.substr(0, eq_pos);
+        std::string value = eq_pos == std::string::npos ? "" : entry.substr(eq_pos + 1);
+        key = urlDecode(key);
+        value = urlDecode(value);
+        if(key.empty() || key == "q")
+            continue;
+        if(argument.find(key) == argument.end())
+            argument.emplace(std::move(key), std::move(value));
     }
     return true;
 }
@@ -1010,6 +1158,22 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
                                  "attachment; filename=\"" + argFilename + "\"; filename*=utf-8''" + urlEncode(
                                      argFilename));
     return output_content;
+}
+
+std::string digestSubconverter(RESPONSE_CALLBACK_ARGS) {
+    auto argument = request.argument;
+    if(!mergePackedQueryArguments(argument))
+    {
+        response.status_code = 400;
+        return "Invalid request! q is missing or malformed.";
+    }
+
+    Request digest_request = request;
+    digest_request.argument = std::move(argument);
+    if(getUrlArg(digest_request.argument, "profile_data").empty() && !global.managedConfigPrefix.empty())
+        digest_request.argument.emplace("profile_data", base64Encode(global.managedConfigPrefix + "/digest?" + joinArguments(request.argument)));
+
+    return subconverter(digest_request, response);
 }
 
 std::string simpleToClashR(RESPONSE_CALLBACK_ARGS) {

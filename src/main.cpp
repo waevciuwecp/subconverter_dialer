@@ -264,6 +264,10 @@ int main(int argc, char *argv[])
 
     webServer.append_response("HEAD", "/sub", "text/plain", subconverter);
 
+    webServer.append_response("GET", "/digest", "text/plain;charset=utf-8", digestSubconverter);
+
+    webServer.append_response("HEAD", "/digest", "text/plain", digestSubconverter);
+
     webServer.append_response("GET", "/sub2clashr", "text/plain;charset=utf-8", simpleToClashR);
 
     webServer.append_response("GET", "/surge2clash", "text/plain;charset=utf-8", surgeConfToClash);

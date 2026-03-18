@@ -124,6 +124,24 @@ Finally subscribe this link in Clash and you are done!
 
 Please refer to [中文文档](https://github.com/asdlokj1qpi23/subconverter/blob/master/README-cn.md#%E8%BF%9B%E9%98%B6%E7%94%A8%E6%B3%95).
 
+### Packed Query (`a` + `q`)
+
+Use `/digest` for packed query strings:
+
+```txt
+http://127.0.0.1:25500/digest?a=<alias>&q=<packed_query>
+```
+
+- `a`: human-readable alias only (ignored by parser logic).
+- `q`: packed request parameters.
+  - plain query string (`target=...&url=...`)
+  - base64/base64url encoded query string
+  - pako deflate payload (zlib/raw/gzip) encoded with base64/base64url
+
+If normal parameters are also present in URL, they take precedence over values decoded from `q`.
+
+`/sub` keeps the original plain-parameter behavior.
+
 ### Clash Dialer / Providers
 
 For Clash/ClashR targets, the following advanced query parameters are available:
