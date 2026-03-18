@@ -2977,6 +2977,11 @@ static rapidjson::Value buildSingBoxTransport(const Proxy &proxy, rapidjson::Mem
             if (!proxy.Edge.empty())
                 headers.AddMember("Edge", rapidjson::StringRef(proxy.Edge.c_str()), allocator);
             transport.AddMember("headers", headers, allocator);
+            if (proxy.WSMaxEarlyData > 0)
+                transport.AddMember("max_early_data", proxy.WSMaxEarlyData, allocator);
+            if (!proxy.WSEarlyDataHeaderName.empty())
+                transport.AddMember("early_data_header_name",
+                                    rapidjson::StringRef(proxy.WSEarlyDataHeaderName.c_str()), allocator);
             break;
         }
         case "grpc"_hash: {
@@ -3128,6 +3133,11 @@ proxyToSingBox(std::vector<Proxy> &nodes, rapidjson::Document &json,
                             vlessheaders.AddMember("Edge", rapidjson::StringRef(x.Edge.c_str()), allocator);
                         vlesstransport.AddMember("type", rapidjson::StringRef("ws"), allocator);
                         addHeaders(vlesstransport, x, allocator);
+                        if (x.WSMaxEarlyData > 0)
+                            vlesstransport.AddMember("max_early_data", x.WSMaxEarlyData, allocator);
+                        if (!x.WSEarlyDataHeaderName.empty())
+                            vlesstransport.AddMember("early_data_header_name",
+                                                     rapidjson::StringRef(x.WSEarlyDataHeaderName.c_str()), allocator);
                         proxy.AddMember("transport", vlesstransport, allocator);
                         break;
                     case "http"_hash:
@@ -3382,11 +3392,19 @@ proxyToSingBox(std::vector<Proxy> &nodes, rapidjson::Document &json,
             tls.AddMember("insecure", buildBooleanValue(scv), allocator);
             if (x.Type == ProxyType::VLESS) {
                 rapidjson::Value reality(rapidjson::kObjectType);
-                if (!x.PublicKey.empty() || !x.ShortId.empty()) {
+                if (!x.Fingerprint.empty()) {
                     rapidjson::Value utls(rapidjson::kObjectType);
                     utls.AddMember("enabled", true, allocator);
-                    utls.AddMember("fingerprint", rapidjson::StringRef("chrome"), allocator);
+                    utls.AddMember("fingerprint", rapidjson::StringRef(x.Fingerprint.c_str()), allocator);
                     tls.AddMember("utls", utls, allocator);
+                }
+                if (!x.PublicKey.empty() || !x.ShortId.empty()) {
+                    if (!tls.HasMember("utls")) {
+                        rapidjson::Value utls(rapidjson::kObjectType);
+                        utls.AddMember("enabled", true, allocator);
+                        utls.AddMember("fingerprint", rapidjson::StringRef("chrome"), allocator);
+                        tls.AddMember("utls", utls, allocator);
+                    }
                     reality.AddMember("enabled", true, allocator);
                     if (!x.PublicKey.empty()) {
                         reality.AddMember("public_key", rapidjson::StringRef(x.PublicKey.c_str()), allocator);

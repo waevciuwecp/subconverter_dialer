@@ -2859,22 +2859,50 @@ int explodeConfContent(const std::string &content, std::vector<Proxy> &nodes) {
     return !nodes.empty();
 }
 
+static std::string getSingBoxStringOrFirstArrayString(const rapidjson::Value &value, const std::string &member) {
+    if (!value.IsObject() || !value.HasMember(member.data()))
+        return "";
+    const rapidjson::Value &target = value[member.data()];
+    if (target.IsString())
+        return target.GetString();
+    if (target.IsArray() && !target.Empty() && target[0].IsString())
+        return target[0].GetString();
+    return "";
+}
+
 void explodeSingboxTransport(rapidjson::Value &singboxNode, std::string &net, std::string &host, std::string &path,
-                             std::string edge) {
+                             std::string &edge, uint32_t &ws_max_early_data,
+                             std::string &ws_early_data_header_name) {
+    ws_max_early_data = 0;
+    ws_early_data_header_name.clear();
     if (singboxNode.HasMember("transport") && singboxNode["transport"].IsObject()) {
         rapidjson::Value transport = singboxNode["transport"].GetObject();
         net = GetMember(transport, "type");
         switch (hash_(net)) {
             case "http"_hash: {
-                host = GetMember(transport, "host");
+                host = getSingBoxStringOrFirstArrayString(transport, "host");
                 break;
             }
             case "ws"_hash: {
                 path = GetMember(transport, "path");
                 if (transport.HasMember("headers") && transport["headers"].IsObject()) {
                     rapidjson::Value headers = transport["headers"].GetObject();
-                    host = GetMember(headers, "Host");
-                    edge = GetMember(headers, "Edge");
+                    host = getSingBoxStringOrFirstArrayString(headers, "Host");
+                    if (host.empty())
+                        host = getSingBoxStringOrFirstArrayString(headers, "host");
+                    edge = getSingBoxStringOrFirstArrayString(headers, "Edge");
+                }
+                if (transport.HasMember("max_early_data") && transport["max_early_data"].IsInt()) {
+                    ws_max_early_data = transport["max_early_data"].GetInt();
+                } else if (transport.HasMember("max_early_data") && transport["max_early_data"].IsUint()) {
+                    ws_max_early_data = transport["max_early_data"].GetUint();
+                } else if (transport.HasMember("max_early_data") && transport["max_early_data"].IsInt64()) {
+                    const auto val = transport["max_early_data"].GetInt64();
+                    if (val > 0)
+                        ws_max_early_data = static_cast<uint32_t>(val);
+                }
+                if (transport.HasMember("early_data_header_name") && transport["early_data_header_name"].IsString()) {
+                    ws_early_data_header_name = transport["early_data_header_name"].GetString();
                 }
                 break;
             }
@@ -2912,6 +2940,8 @@ void explodeSingbox(rapidjson::Value &outbounds, std::vector<Proxy> &nodes) {
             string_array dns_server;
             std::string fingerprint;
             std::string congestion_control, udp_relay_mode; //quic
+            uint32_t ws_max_early_data = 0;
+            std::string ws_early_data_header_name;
             tribool udp, tfo, scv, rrt, disableSni;
             rapidjson::Value singboxNode = outbounds[i].GetObject();
             if (singboxNode.HasMember("type") && singboxNode["type"].IsString()) {
@@ -2966,6 +2996,9 @@ void explodeSingbox(rapidjson::Value &outbounds, std::vector<Proxy> &nodes) {
                             fingerprint = reality["fingerprint"].GetString();
                         }
                     }
+                    if (!fingerprint.empty()) {
+                        fp = fingerprint;
+                    }
                 } else {
                     tls = "false";
                 }
@@ -2978,7 +3011,8 @@ void explodeSingbox(rapidjson::Value &outbounds, std::vector<Proxy> &nodes) {
                         }
                         aid = GetMember(singboxNode, "alter_id");
                         cipher = GetMember(singboxNode, "security");
-                        explodeSingboxTransport(singboxNode, net, host, path, edge);
+                        explodeSingboxTransport(singboxNode, net, host, path, edge, ws_max_early_data,
+                                                ws_early_data_header_name);
                         vmessConstruct(node, group, ps, server, port, "", id, aid, net, cipher, path, host, edge, tls,
                                        sni, alpnList, udp,
                                        tfo, scv);
@@ -2994,7 +3028,8 @@ void explodeSingbox(rapidjson::Value &outbounds, std::vector<Proxy> &nodes) {
                     case "trojan"_hash:
                         group = TROJAN_DEFAULT_GROUP;
                         password = GetMember(singboxNode, "password");
-                        explodeSingboxTransport(singboxNode, net, host, path, edge);
+                        explodeSingboxTransport(singboxNode, net, host, path, edge, ws_max_early_data,
+                                                ws_early_data_header_name);
                         trojanConstruct(node, group, ps, server, port, password, net, host, path, fp, sni, alpnList,
                                         true, udp,
                                         tfo,
@@ -3017,20 +3052,37 @@ void explodeSingbox(rapidjson::Value &outbounds, std::vector<Proxy> &nodes) {
                                     path = GetMember(transport, "path");
                                     if (transport.HasMember("headers") && transport["headers"].IsObject()) {
                                         rapidjson::Value headers = transport["headers"].GetObject();
-                                        host = GetMember(headers, "Host");
-                                        edge = GetMember(headers, "Edge");
+                                        host = getSingBoxStringOrFirstArrayString(headers, "Host");
+                                        if (host.empty())
+                                            host = getSingBoxStringOrFirstArrayString(headers, "host");
+                                        edge = getSingBoxStringOrFirstArrayString(headers, "Edge");
+                                    }
+                                    if (transport.HasMember("max_early_data") && transport["max_early_data"].IsInt()) {
+                                        ws_max_early_data = transport["max_early_data"].GetInt();
+                                    } else if (transport.HasMember("max_early_data") &&
+                                              transport["max_early_data"].IsUint()) {
+                                        ws_max_early_data = transport["max_early_data"].GetUint();
+                                    } else if (transport.HasMember("max_early_data") &&
+                                              transport["max_early_data"].IsInt64()) {
+                                        const auto val = transport["max_early_data"].GetInt64();
+                                        if (val > 0)
+                                            ws_max_early_data = static_cast<uint32_t>(val);
+                                    }
+                                    if (transport.HasMember("early_data_header_name") &&
+                                        transport["early_data_header_name"].IsString()) {
+                                        ws_early_data_header_name = transport["early_data_header_name"].GetString();
                                     }
                                     break;
                                 }
                                 case "http"_hash: {
-                                    host = GetMember(transport, "host");
+                                    host = getSingBoxStringOrFirstArrayString(transport, "host");
                                     path = GetMember(transport, "path");
                                     edge.clear();
                                     break;
                                 }
                                 case "httpupgrade"_hash: {
                                     net = "h2";
-                                    host = GetMember(transport, "host");
+                                    host = getSingBoxStringOrFirstArrayString(transport, "host");
                                     path = GetMember(transport, "path");
                                     edge.clear();
                                     break;
@@ -3124,6 +3176,10 @@ void explodeSingbox(rapidjson::Value &outbounds, std::vector<Proxy> &nodes) {
                     default:
                         continue;
                 }
+                if (ws_max_early_data > 0)
+                    node.WSMaxEarlyData = ws_max_early_data;
+                if (!ws_early_data_header_name.empty())
+                    node.WSEarlyDataHeaderName = ws_early_data_header_name;
                 node.Id = index;
                 nodes.emplace_back(std::move(node));
                 index++;

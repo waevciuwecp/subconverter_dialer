@@ -147,6 +147,8 @@ struct Proxy {
     String PacketEncoding;
     String Multiplexing;
     tribool V2rayHttpUpgrade;
+    uint32_t WSMaxEarlyData = 0;
+    String WSEarlyDataHeaderName;
 };
 
 #define SS_DEFAULT_GROUP "SSProvider"
