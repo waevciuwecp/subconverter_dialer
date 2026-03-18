@@ -19,8 +19,10 @@ cp "$repo_root/base/base/singbox.json" "$tmp_dir/singbox.json"
 
 pref_path="$tmp_dir/pref.ini"
 gen_path="$tmp_dir/generate.ini"
-out_v111="$tmp_dir/singbox_v111.json"
+out_v112="$tmp_dir/singbox_v112.json"
 out_v114="$tmp_dir/singbox_v114.json"
+out_v111="$tmp_dir/singbox_v111.json"
+err_v111="$tmp_dir/singbox_v111.err"
 
 ss_link_1='ss://YWVzLTEyOC1nY206cHdk@1.1.1.1:8388#awesome-node'
 ss_link_2='ss://YWVzLTEyOC1nY206cHdk@2.2.2.2:8388#relay-node'
@@ -48,10 +50,10 @@ custom_proxy_group=Proxy\`select\`[]awesome-node\`[]plain-node\`[]DIRECT
 PREF
 
 cat > "$gen_path" <<GEN
-[singbox_v111]
-path=$out_v111
+[singbox_v112]
+path=$out_v112
 target=singbox
-ver=1.11.0
+ver=1.12.0
 url=tag:sub,$ss_link_1|tag:relay,$ss_link_2|tag:other,$ss_link_3
 use_dialer=true
 dialer_group_name=dialer
@@ -65,13 +67,29 @@ url=tag:sub,$ss_link_1|tag:relay,$ss_link_2|tag:other,$ss_link_3
 use_dialer=true
 dialer_group_name=dialer
 apply_dialer_to=awesome
+
+[singbox_v111_invalid]
+path=$out_v111
+target=singbox
+singbox_ver=1.11.0
+url=$ss_link_1
 GEN
 
 (
   cd "$tmp_dir"
-  "$bin_path" -f "$pref_path" -g --artifact singbox_v111 >/dev/null 2>&1
+  "$bin_path" -f "$pref_path" -g --artifact singbox_v112 >/dev/null 2>&1
   "$bin_path" -f "$pref_path" -g --artifact singbox_v114 >/dev/null 2>&1
+  if "$bin_path" -f "$pref_path" -g --artifact singbox_v111_invalid >"$err_v111" 2>&1; then
+    echo "expected singbox 1.11 artifact generation to fail" >&2
+    exit 1
+  fi
 )
+
+if ! rg -n --fixed-strings 'Invalid singbox_ver! Supported range: 1.12.x - 1.14.x' "$err_v111" >/dev/null; then
+  echo "expected 1.11 validation error not found" >&2
+  cat "$err_v111" >&2
+  exit 1
+fi
 
 assert_non_empty() {
   local path="$1"
@@ -90,15 +108,6 @@ assert_contains_fixed() {
   fi
 }
 
-assert_not_contains_fixed() {
-  local path="$1"
-  local pattern="$2"
-  if rg -n --fixed-strings "$pattern" "$path" >/dev/null; then
-    echo "unexpected pattern found in $path: $pattern" >&2
-    exit 1
-  fi
-}
-
 assert_jq_true() {
   local path="$1"
   local expr="$2"
@@ -108,20 +117,20 @@ assert_jq_true() {
   fi
 }
 
-assert_non_empty "$out_v111"
+assert_non_empty "$out_v112"
 assert_non_empty "$out_v114"
 
-assert_contains_fixed "$out_v111" "\"awesome-node\""
+assert_contains_fixed "$out_v112" "\"awesome-node\""
 assert_contains_fixed "$out_v114" "\"awesome-node\""
-assert_contains_fixed "$out_v111" "\"relay-node\""
+assert_contains_fixed "$out_v112" "\"relay-node\""
 assert_contains_fixed "$out_v114" "\"relay-node\""
-assert_contains_fixed "$out_v111" "\"detour\":\"dialer\""
+assert_contains_fixed "$out_v112" "\"detour\":\"dialer\""
 assert_contains_fixed "$out_v114" "\"detour\":\"dialer\""
 
-detour_count_v111="$(rg -o --fixed-strings '"detour":"dialer"' "$out_v111" | wc -l | tr -d ' ')"
+detour_count_v112="$(rg -o --fixed-strings '"detour":"dialer"' "$out_v112" | wc -l | tr -d ' ')"
 detour_count_v114="$(rg -o --fixed-strings '"detour":"dialer"' "$out_v114" | wc -l | tr -d ' ')"
-if [[ "$detour_count_v111" != "1" ]]; then
-  echo "expected exactly one detour in v1.11 output, got $detour_count_v111" >&2
+if [[ "$detour_count_v112" != "1" ]]; then
+  echo "expected exactly one detour in v1.12 output, got $detour_count_v112" >&2
   exit 1
 fi
 if [[ "$detour_count_v114" != "1" ]]; then
@@ -129,23 +138,29 @@ if [[ "$detour_count_v114" != "1" ]]; then
   exit 1
 fi
 
-assert_contains_fixed "$out_v111" "\"action\":\"route\""
+assert_contains_fixed "$out_v112" "\"action\":\"route\""
 assert_contains_fixed "$out_v114" "\"action\":\"route\""
-assert_contains_fixed "$out_v111" "\"tag\":\"dialer-select\""
+assert_contains_fixed "$out_v112" "\"tag\":\"dialer-select\""
 assert_contains_fixed "$out_v114" "\"tag\":\"dialer-select\""
-assert_contains_fixed "$out_v111" "\"tag\":\"dialer-lb\""
+assert_contains_fixed "$out_v112" "\"tag\":\"dialer-lb\""
 assert_contains_fixed "$out_v114" "\"tag\":\"dialer-lb\""
-assert_contains_fixed "$out_v111" "\"tag\":\"dialer\""
+assert_contains_fixed "$out_v112" "\"tag\":\"dialer\""
 assert_contains_fixed "$out_v114" "\"tag\":\"dialer\""
-assert_contains_fixed "$out_v111" "\"tag\":\"REJECT\""
+assert_contains_fixed "$out_v112" "\"tag\":\"REJECT\""
 assert_contains_fixed "$out_v114" "\"tag\":\"REJECT\""
-assert_contains_fixed "$out_v111" "\"outbounds\":[\"awesome-node\",\"relay-node\"]"
+assert_contains_fixed "$out_v112" "\"outbounds\":[\"awesome-node\",\"relay-node\"]"
 assert_contains_fixed "$out_v114" "\"outbounds\":[\"awesome-node\",\"relay-node\"]"
-assert_contains_fixed "$out_v111" "\"outbounds\":[\"dialer-select\",\"dialer-lb\",\"DIRECT\"]"
+assert_contains_fixed "$out_v112" "\"outbounds\":[\"dialer-select\",\"dialer-lb\",\"DIRECT\"]"
 assert_contains_fixed "$out_v114" "\"outbounds\":[\"dialer-select\",\"dialer-lb\",\"DIRECT\"]"
-assert_jq_true "$out_v111" '.dns.servers[] | select(.tag == "dns_direct") | .address == "https://dns.alidns.com/dns-query"'
+assert_jq_true "$out_v112" '.dns.servers[] | select(.tag == "dns_direct") | .type == "udp" and .server == "223.5.5.5"'
+assert_jq_true "$out_v114" '.dns.servers[] | select(.tag == "dns_direct") | .type == "udp" and .server == "223.5.5.5"'
+assert_jq_true "$out_v112" '([.dns.servers[]? | select(.detour == "DIRECT")] | length) == 0'
 assert_jq_true "$out_v114" '([.dns.servers[]? | select(.detour == "DIRECT")] | length) == 0'
+assert_jq_true "$out_v112" '(.ntp.detour // "") != "DIRECT"'
 assert_jq_true "$out_v114" '(.ntp.detour // "") != "DIRECT"'
-assert_jq_true "$out_v114" '.dns.servers[] | select(.tag == "dns_direct") | .type == "https"'
+assert_jq_true "$out_v112" '.dns.fakeip == null'
+assert_jq_true "$out_v114" '.dns.fakeip == null'
+assert_jq_true "$out_v112" '.route.default_domain_resolver == "dns_direct"'
+assert_jq_true "$out_v114" '.route.default_domain_resolver == "dns_direct"'
 
-echo "PASS: singbox dialer and versioned route action behavior is correct"
+echo "PASS: singbox dialer output is valid for 1.12-1.14 and 1.11 is rejected"

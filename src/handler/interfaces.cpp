@@ -942,7 +942,7 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
     if(argTarget == "singbox")
     {
         if(argSingBoxVer.empty())
-            argSingBoxVer = "1.11.0";
+            argSingBoxVer = "1.12.0";
         std::string normalized_singbox_ver;
         if(!normalizeVersion(argSingBoxVer, normalized_singbox_ver))
         {
@@ -950,13 +950,13 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
             return "Invalid singbox_ver!";
         }
         argSingBoxVer = normalized_singbox_ver;
-        if(!verGreaterEqual(argSingBoxVer, "1.11.0") || verGreaterEqual(argSingBoxVer, "1.15.0"))
+        if(!verGreaterEqual(argSingBoxVer, "1.12.0") || verGreaterEqual(argSingBoxVer, "1.15.0"))
         {
             *status_code = 400;
-            return "Invalid singbox_ver! Supported range: 1.11.x - 1.14.x";
+            return "Invalid singbox_ver! Supported range: 1.12.x - 1.14.x";
         }
         ext.singbox_version = argSingBoxVer;
-        ext.singbox_use_route_action = verGreaterEqual(argSingBoxVer, "1.11.0");
+        ext.singbox_use_route_action = true;
         tpl_args.request_params["singbox_ver"] = argSingBoxVer;
         tpl_args.request_params["singbox.ver"] = argSingBoxVer;
         tpl_args.request_params["singbox.route_action"] = ext.singbox_use_route_action ? "1" : "0";
@@ -1804,6 +1804,9 @@ int simpleGenerator() {
     Request request;
     Response response;
     for (std::string &x: sections) {
+        eraseElements(allItems);
+        eraseElements(request.argument);
+        eraseElements(response.headers);
         response.status_code = 200;
         //std::cerr<<"Generating artifact '"<<x<<"'...\n";
         writeLog(0, "Generating artifact '" + x + "'...", LOG_LEVEL_INFO);

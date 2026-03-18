@@ -277,70 +277,42 @@ enhanced-mode-by-rule = true
     "dns": {
         "servers": [
             {
-                "tag": "dns_resolver",
-                "address": "223.5.5.5",
-                "detour": "DIRECT"
-            },
-            {
-                "tag": "dns_proxy",
-                "address": "tls://1.1.1.1",
-                "address_resolver": "dns_resolver"
-            },
-            {
+                "type": "udp",
                 "tag": "dns_direct",
-                "address": "https://dns.alidns.com/dns-query",
-                "address_resolver": "dns_resolver",
-                "detour": "DIRECT"
+                "server": "223.5.5.5"
             },
             {
+                "type": "tls",
+                "tag": "dns_proxy",
+                "server": "1.1.1.1"
+            },
+            {
+                "type": "fakeip",
                 "tag": "dns_fakeip",
-                "address": "fakeip"
-            },
-            {
-                "tag": "dns_block",
-                "address": "rcode://success"
+                "inet4_range": "198.18.0.0/15"{% if default(request.singbox.ipv6, "") == "1" %},
+                "inet6_range": "fc00::/18"{% endif %}
             }
         ],
         "rules": [
             {
-                "outbound": [
-                    "any"
-                ],
-                "server": "dns_resolver"
+                "clash_mode": "direct",
+                "server": "dns_direct"
             },
             {
-                "geosite": [
-                    "category-ads-all"
-                ],
-                "server": "dns_block",
-                "disable_cache": true
+                "clash_mode": "global",
+                "server": "dns_proxy"
             },
             {
-                "geosite": [
-                    "geolocation-!cn"
-                ],
                 "query_type": [
                     "A",
                     "AAAA"
                 ],
                 "server": "dns_fakeip"
-            },
-            {
-                "geosite": [
-                    "geolocation-!cn"
-                ],
-                "server": "dns_proxy"
             }
         ],
         "final": "dns_direct",
         "independent_cache": true,
-        "fakeip": {
-            "enabled": true,
-            {% if default(request.singbox.ipv6, "") == "1" %}
-            "inet6_range": "fc00::\/18",
-            {% endif %}
-            "inet4_range": "198.18.0.0\/15"
-        }
+        "strategy": "prefer_ipv4"
     },
     "ntp": {
         "enabled": true,
@@ -375,7 +347,8 @@ enhanced-mode-by-rule = true
     "outbounds": [],
     "route": {
         "rules": [],
-        "auto_detect_interface": true
+        "auto_detect_interface": true,
+        "default_domain_resolver": "dns_direct"
     },
     "experimental": {
         "cache_file": {

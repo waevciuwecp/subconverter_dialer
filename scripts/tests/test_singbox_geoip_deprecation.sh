@@ -19,7 +19,7 @@ cp "$repo_root/base/base/singbox.json" "$tmp_dir/singbox.json"
 
 pref_path="$tmp_dir/pref.ini"
 gen_path="$tmp_dir/generate.ini"
-out_v111="$tmp_dir/singbox_v111.json"
+out_v112="$tmp_dir/singbox_v112.json"
 out_v114="$tmp_dir/singbox_v114.json"
 
 ss_link='ss://YWVzLTEyOC1nY206cHdk@1.1.1.1:8388#awesome-node'
@@ -46,10 +46,10 @@ custom_proxy_group=Proxy\`select\`[]awesome-node\`[]DIRECT
 PREF
 
 cat > "$gen_path" <<GEN
-[singbox_v111]
-path=$out_v111
+[singbox_v112]
+path=$out_v112
 target=singbox
-singbox_ver=1.11.0
+singbox_ver=1.12.0
 url=$ss_link
 
 [singbox_v114]
@@ -61,7 +61,7 @@ GEN
 
 (
   cd "$tmp_dir"
-  "$bin_path" -f "$pref_path" -g --artifact singbox_v111 >/dev/null 2>&1
+  "$bin_path" -f "$pref_path" -g --artifact singbox_v112 >/dev/null 2>&1
   "$bin_path" -f "$pref_path" -g --artifact singbox_v114 >/dev/null 2>&1
 )
 
@@ -87,20 +87,19 @@ assert_rule_key_state() {
   fi
 }
 
-assert_non_empty "$out_v111"
+assert_non_empty "$out_v112"
 assert_non_empty "$out_v114"
 
-# 1.11 keeps legacy database rules.
-assert_rule_key_state "$out_v111" "geoip" "true"
-assert_rule_key_state "$out_v111" "source_geoip" "true"
-assert_rule_key_state "$out_v111" "geosite" "true"
-
 # 1.12+ must drop deprecated database rules to avoid invalid configs.
+assert_rule_key_state "$out_v112" "geoip" "false"
+assert_rule_key_state "$out_v112" "source_geoip" "false"
+assert_rule_key_state "$out_v112" "geosite" "false"
 assert_rule_key_state "$out_v114" "geoip" "false"
 assert_rule_key_state "$out_v114" "source_geoip" "false"
 assert_rule_key_state "$out_v114" "geosite" "false"
 
 # Non-deprecated rules should still be generated.
+assert_rule_key_state "$out_v112" "domain" "true"
 assert_rule_key_state "$out_v114" "domain" "true"
 
-echo "PASS: singbox >=1.12 skips deprecated geoip/geosite database rules"
+echo "PASS: singbox 1.12-1.14 skips deprecated geoip/geosite database rules"
