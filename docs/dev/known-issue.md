@@ -63,7 +63,7 @@ This document records the top 5 vulnerabilities identified in this repository, t
 - Risk: Unsafe bootstrap posture (remote exposure, weak API controls, permissive runtime behavior).
 - Fix:
   - Secure-by-default examples:
-    - `api_mode=true`
+    - `api_mode=false` (temporary compatibility setting for public use; tracked below as needed-fix)
     - non-empty `api_access_token`
     - `listen=127.0.0.1`
     - empty `serve_file_root`
@@ -78,7 +78,7 @@ This document records the top 5 vulnerabilities identified in this repository, t
   - `base/pref.example.ini`
   - `base/pref.example.yml`
   - `scripts/tests/run_local_backend.sh`
-- Status: **SOLVED** (tests passed)
+- Status: **PARTIALLY SOLVED** (needed-fix tracked)
 
 ## Unsolved Issues (Tracked)
 
@@ -93,6 +93,19 @@ This document records the top 5 vulnerabilities identified in this repository, t
   - Add a strict mode (default `true` for new installs) that always requires auth for management endpoints.
   - Emit startup warnings (or refuse startup in strict mode) when token is empty.
 - Status: **UNSOLVED** (tracked)
+
+### B) Public preset currently uses `api_mode=false` (temporary)
+- Risk: Disabling API mode broadens trusted behavior and increases blast radius for misconfiguration/exposure.
+- Current state:
+  - Preset is intentionally set to `api_mode=false` as a temporary compatibility choice.
+  - Other hardening remains in place (`api_access_token`, loopback bind, outbound protections).
+- Why this is needed-fix:
+  - Long-term public-safe posture should not rely on trusted-mode defaults.
+  - A stronger design is needed so compatibility does not require disabling API mode.
+- Proposed follow-up:
+  - Design a compatibility profile that keeps `api_mode=true` while preserving expected public workflows.
+  - Introduce explicit migration guidance and feature flags for legacy behavior.
+- Status: **NEEDED-FIX** (tracked)
 
 ## Notes
 

@@ -1,5 +1,5 @@
 common:
-  api_mode: true
+  api_mode: false
   api_access_token: change-this-token
   default_url: []
   enable_insert: true
