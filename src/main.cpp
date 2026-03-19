@@ -292,7 +292,9 @@ int main(int argc, char *argv[])
 
     //webServer.append_response("GET", "/list-profiles", "text/plain;charset=utf-8", listProfiles);
 
-    std::string env_port = getEnv("PORT");
+    std::string env_listen = getEnv("LISTEN"), env_port = getEnv("PORT");
+    if(!env_listen.empty())
+        global.listenAddress = env_listen;
     if(!env_port.empty())
         global.listenPort = to_int(env_port, global.listenPort);
     listener_args args = {global.listenAddress, global.listenPort, global.maxPendingConns, global.maxConcurThreads, cron_tick_caller, 200};

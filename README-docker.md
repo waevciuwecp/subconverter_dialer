@@ -5,15 +5,12 @@ Current example pref defaults are security-oriented:
 - `api_access_token=change-this-token`
 - `api_mode=false` (temporary compatibility default; tracked as needed-fix in `docs/dev/known-issue.md`)
 
-For Docker port publishing, override listen address to `0.0.0.0` inside the container:
+For Docker port publishing, set `LISTEN=0.0.0.0`:
 ```bash
 # run the container detached, forward internal port 25500 to host port 25500
 docker run -d --restart=always -p 25500:25500 \
-  asdlokj1qpi23/subconverter:latest \
-  sh -ec 'cp /base/pref.example.toml /base/pref.toml && \
-          sed -i -e "s#^base_path *=.*#base_path = \"/base\"#g" \
-                 -e "s#^listen *=.*#listen = \"0.0.0.0\"#g" /base/pref.toml && \
-          exec subconverter'
+  -e LISTEN=0.0.0.0 \
+  asdlokj1qpi23/subconverter:latest
 # then check its status
 curl http://localhost:25500/version
 # if you see `subconverter vx.x.x backend` then the container is up and running
@@ -26,11 +23,8 @@ services:
   subconverter:
     image: asdlokj1qpi23/subconverter:latest
     container_name: subconverter
-    command: >-
-      sh -ec 'cp /base/pref.example.toml /base/pref.toml &&
-      sed -i -e "s#^base_path *=.*#base_path = \"/base\"#g"
-      -e "s#^listen *=.*#listen = \"0.0.0.0\"#g" /base/pref.toml &&
-      exec subconverter'
+    environment:
+      - LISTEN=0.0.0.0
     ports:
       - "15051:25500"
     restart: always
@@ -61,11 +55,8 @@ Save the content above to a `Dockerfile`, then run:
 docker build -t subconverter-custom:latest .
 # run the docker detached, forward internal port 25500 to host port 25500
 docker run -d --restart=always -p 25500:25500 \
-  subconverter-custom:latest \
-  sh -ec 'cp /base/pref.example.toml /base/pref.toml && \
-          sed -i -e "s#^base_path *=.*#base_path = \"/base\"#g" \
-                 -e "s#^listen *=.*#listen = \"0.0.0.0\"#g" /base/pref.toml && \
-          exec subconverter'
+  -e LISTEN=0.0.0.0 \
+  subconverter-custom:latest
 # then check its status
 curl http://localhost:25500/version
 # if you see `subconverter vx.x.x backend` then the container is up and running
