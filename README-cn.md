@@ -1084,6 +1084,8 @@ custom_proxy_group=dialer-lb`load-balance-use`(sub|dialer|relay)`http://www.gsta
     >
     > 关键词文件路径：`base/ua_block_keywords.list`
     >
+    > 兼容回退路径：`ua_block_keywords.list`（工作目录根目录）
+    >
     > 匹配规则：不区分大小写的“包含匹配”，每行一个关键词，空行和 `#` 注释行会被忽略
     >
     > 关键词文件可在运行时热加载（无需重启）

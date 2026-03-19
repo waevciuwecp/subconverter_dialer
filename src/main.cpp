@@ -286,10 +286,6 @@ int main(int argc, char *argv[])
             return webGet(url, "");
         });
 
-        webServer.append_response("GET", "/getlocal", "text/plain;charset=utf-8", [](RESPONSE_CALLBACK_ARGS) -> std::string
-        {
-            return fileGet(urlDecode(getUrlArg(request.argument, "path")));
-        });
     }
 
     //webServer.append_response("POST", "/create-profile", "text/plain;charset=utf-8", createProfile);

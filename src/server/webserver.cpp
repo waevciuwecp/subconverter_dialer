@@ -10,6 +10,7 @@ namespace
 {
 constexpr auto kUaBlockReloadInterval = std::chrono::seconds(5);
 constexpr const char *kDefaultUaBlockKeywordsPath = "base/ua_block_keywords.list";
+constexpr const char *kLegacyUaBlockKeywordsPath = "ua_block_keywords.list";
 
 static string_array parse_ua_block_keywords(const std::string &content)
 {
@@ -49,24 +50,33 @@ void WebServer::reload_ua_block_keywords_if_needed_locked()
     }
     ua_block_keywords_next_reload = now + kUaBlockReloadInterval;
 
-    std::string content;
-    std::string loaded_from;
-    if (fileExist(ua_block_keywords_path))
+    std::string content, loaded_from;
+    string_array checked_paths;
+    checked_paths.emplace_back(ua_block_keywords_path);
+    if (ua_block_keywords_path != kDefaultUaBlockKeywordsPath)
     {
-        loaded_from = ua_block_keywords_path;
-        content = fileGet(ua_block_keywords_path);
+        checked_paths.emplace_back(kDefaultUaBlockKeywordsPath);
     }
-    else if (ua_block_keywords_path != kDefaultUaBlockKeywordsPath && fileExist(kDefaultUaBlockKeywordsPath))
+    if (ua_block_keywords_path != kLegacyUaBlockKeywordsPath && kDefaultUaBlockKeywordsPath != std::string(kLegacyUaBlockKeywordsPath))
     {
-        loaded_from = kDefaultUaBlockKeywordsPath;
-        content = fileGet(kDefaultUaBlockKeywordsPath);
+        checked_paths.emplace_back(kLegacyUaBlockKeywordsPath);
+    }
+    for (const auto &path : checked_paths)
+    {
+        if (!fileExist(path))
+        {
+            continue;
+        }
+        loaded_from = path;
+        content = fileGet(path);
+        break;
     }
 
     if (loaded_from.empty())
     {
         if (!ua_block_keywords_missing_warned)
         {
-            writeLog(0, "UA blocker keyword file not found, blocker has no active patterns. Checked '" + ua_block_keywords_path + "' and '" + kDefaultUaBlockKeywordsPath + "'.", LOG_LEVEL_WARNING);
+            writeLog(0, "UA blocker keyword file not found, blocker has no active patterns. Checked: " + join(checked_paths, ", "), LOG_LEVEL_WARNING);
             ua_block_keywords_missing_warned = true;
         }
         ua_block_keywords.clear();

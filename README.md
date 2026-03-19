@@ -192,6 +192,7 @@ Notes:
 Incoming HTTP requests are protected by a User-Agent blocker before route handling.
 
 - Keyword list file: `base/ua_block_keywords.list`
+- Compatibility fallback path: `ua_block_keywords.list` (working directory root)
 - Match rule: case-insensitive substring match, one keyword per line
 - File format: empty lines and lines starting with `#` are ignored
 - Reload behavior: keywords are reloaded automatically at runtime (no restart required)
