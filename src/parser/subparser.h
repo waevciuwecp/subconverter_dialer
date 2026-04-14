@@ -43,7 +43,7 @@ void vlessConstruct(Proxy &node, const std::string &group, const std::string &re
                     const std::vector<std::string> &alpnList,const std::string &packet_encoding, const std::string &encryption,
                     tribool udp = tribool(), tribool tfo = tribool(), tribool scv = tribool(),
                     tribool tls13 = tribool(),const std::string& underlying_proxy="",tribool v2ray_http_upgrade=tribool(),
-                    const std::string &xhttp_mode = "");
+                    const std::string &xhttp_mode = "", const std::string &pqv = "");
 
 void vmessConstruct(Proxy &node, const std::string &group, const std::string &remarks, const std::string &add,
                     const std::string &port, const std::string &type, const std::string &id, const std::string &aid,

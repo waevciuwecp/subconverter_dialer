@@ -598,7 +598,7 @@ TEST_CASE("vless std link keeps xhttp transport and core fields")
 {
     const std::string link =
         "vless://55555555-5555-5555-5555-555555555555@example.com:443"
-        "?encryption=none&security=tls&type=xhttp&host=xhttp.example.com&path=%2Fxhttp&mode=stream-up"
+        "?encryption=none&pqv=pqv-token&security=tls&type=xhttp&host=xhttp.example.com&path=%2Fxhttp&mode=stream-up"
         "&alpn=h3&sni=tls.example.com#xhttp-node";
 
     Proxy node;
@@ -609,6 +609,7 @@ TEST_CASE("vless std link keeps xhttp transport and core fields")
     CHECK(node.Host == "xhttp.example.com");
     CHECK(node.Path == "/xhttp");
     CHECK(node.XHTTPMode == "stream-up");
+    CHECK(node.PQV == "pqv-token");
     CHECK(node.ServerName == "tls.example.com");
     REQUIRE(node.AlpnList.size() == 1);
     CHECK(node.AlpnList[0] == "h3");
@@ -653,7 +654,7 @@ TEST_CASE("vless single export keeps xhttp type and mode")
 {
     Proxy node;
     explode("vless://88888888-8888-8888-8888-888888888888@example.com:443"
-            "?encryption=none&security=tls&type=xhttp&host=xhttp.example.com&path=%2Fnode&mode=stream-one#xhttp-export",
+            "?encryption=mlkem768x25519plus.native.1rtt.QUJDREVGR0g&pqv=pqv-export&security=tls&type=xhttp&host=xhttp.example.com&path=%2Fnode&mode=stream-one#xhttp-export",
             node);
 
     REQUIRE(node.Type == ProxyType::VLESS);
@@ -666,6 +667,8 @@ TEST_CASE("vless single export keeps xhttp type and mode")
     CHECK(plain.find("type=xhttp") != std::string::npos);
     CHECK(plain.find("mode=stream-one") != std::string::npos);
     CHECK(plain.find("path=") != std::string::npos);
+    CHECK(plain.find("encryption=mlkem768x25519plus.native.1rtt.QUJDREVGR0g") != std::string::npos);
+    CHECK(plain.find("pqv=pqv-export") != std::string::npos);
 }
 
 TEST_CASE("vless sing-box export keeps httpupgrade transport")
@@ -722,6 +725,51 @@ TEST_CASE("vless clash export keeps xhttp transport")
     CHECK(clashNode["xhttp-opts"]["headers"]["Host"].as<std::string>() == "xhttp.example.com");
 }
 
+TEST_CASE("vless clash export keeps mlkem encryption")
+{
+    Proxy node;
+    explode("vless://abababab-abab-abab-abab-abababababab@example.com:443"
+            "?encryption=mlkem768x25519plus.native.1rtt.QUJDREVGR0g&security=tls&type=tcp#mlkem-clash",
+            node);
+
+    REQUIRE(node.Type == ProxyType::VLESS);
+    std::vector<Proxy> nodes = {node};
+    std::vector<RulesetContent> rulesets;
+    extra_settings ext;
+    ext.enable_rule_generator = false;
+    ext.nodelist = true;
+    ext.clash_new_field_name = true;
+
+    const std::string output = proxyToClash(nodes, "{}", rulesets, ProxyGroupConfigs{}, false, ext);
+    YAML::Node root = YAML::Load(output);
+    REQUIRE(root["proxies"].IsDefined());
+    REQUIRE(root["proxies"].size() == 1);
+    YAML::Node clashNode = root["proxies"][0];
+    CHECK(clashNode["name"].as<std::string>() == "mlkem-clash");
+    CHECK(clashNode["encryption"].as<std::string>() == "mlkem768x25519plus.native.1rtt.QUJDREVGR0g");
+}
+
+TEST_CASE("vless clash export fail-closes pqv-only node")
+{
+    Proxy node;
+    explode("vless://acacacac-acac-acac-acac-acacacacacac@example.com:443"
+            "?encryption=none&pqv=pqv-token&security=tls&type=tcp#pqv-clash",
+            node);
+
+    REQUIRE(node.Type == ProxyType::VLESS);
+    std::vector<Proxy> nodes = {node};
+    std::vector<RulesetContent> rulesets;
+    extra_settings ext;
+    ext.enable_rule_generator = false;
+    ext.nodelist = true;
+    ext.clash_new_field_name = true;
+
+    const std::string output = proxyToClash(nodes, "{}", rulesets, ProxyGroupConfigs{}, false, ext);
+    YAML::Node root = YAML::Load(output);
+    REQUIRE(root["proxies"].IsDefined());
+    CHECK(root["proxies"].size() == 0);
+}
+
 TEST_CASE("vless sing-box export fail-closes splithttp transport")
 {
     Proxy node;
@@ -744,6 +792,35 @@ TEST_CASE("vless sing-box export fail-closes splithttp transport")
 
     const rapidjson::Value *outbound = findOutboundByTag(doc, node.Remark);
     CHECK(outbound == nullptr);
+}
+
+TEST_CASE("vless sing-box export fail-closes mlkem and pqv nodes")
+{
+    Proxy mlkem;
+    explode("vless://bcbcbcbc-bcbc-bcbc-bcbc-bcbcbcbcbcbc@example.com:443"
+            "?encryption=mlkem768x25519plus.native.1rtt.QUJDREVGR0g&security=tls&type=tcp#mlkem-singbox",
+            mlkem);
+    Proxy pqv;
+    explode("vless://cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd@example.com:443"
+            "?encryption=none&pqv=pqv-token&security=tls&type=tcp#pqv-singbox",
+            pqv);
+
+    REQUIRE(mlkem.Type == ProxyType::VLESS);
+    REQUIRE(pqv.Type == ProxyType::VLESS);
+    std::vector<Proxy> nodes = {mlkem, pqv};
+    std::vector<RulesetContent> rulesets;
+    extra_settings ext;
+    ext.enable_rule_generator = false;
+    ext.nodelist = true;
+    ext.singbox_version = "1.14.0";
+
+    const std::string output = proxyToSingBox(nodes, "{}", rulesets, ProxyGroupConfigs{}, ext);
+    rapidjson::Document doc;
+    doc.Parse(output.c_str());
+    REQUIRE(!doc.HasParseError());
+
+    CHECK(findOutboundByTag(doc, "mlkem-singbox") == nullptr);
+    CHECK(findOutboundByTag(doc, "pqv-singbox") == nullptr);
 }
 
 TEST_CASE("xray jsonc vless xhttp and splithttp examples parse correctly")

@@ -57,6 +57,20 @@ void logSkipUnsupportedVlessTransport(const std::string &target, const Proxy &pr
                 "': unsupported transport '" + proxy.TransferProtocol + "'.", LOG_LEVEL_WARNING);
 }
 
+bool isVlessMlkemEncryption(const std::string &encryption) {
+    const std::string normalized = toLower(trim(encryption));
+    return strFind(normalized, "mlkem768x25519plus");
+}
+
+bool hasUnmappablePqv(const Proxy &proxy) {
+    return !trim(proxy.PQV).empty();
+}
+
+void logSkipUnsupportedVlessMlkemMapping(const std::string &target, const Proxy &proxy, const std::string &reason) {
+    writeLog(0, "Skip VLESS node '" + proxy.Remark + "' for target '" + target +
+                "': unsupported ML-KEM/PQV mapping (" + reason + ").", LOG_LEVEL_WARNING);
+}
+
 
 std::string
 vmessLinkConstruct(const std::string &remarks, const std::string &add, const std::string &port, const std::string &type,
@@ -740,6 +754,10 @@ proxyToClash(std::vector<Proxy> &nodes, YAML::Node &yamlnode, const ProxyGroupCo
                 break;
             case ProxyType::VLESS:
                 singleproxy["type"] = "vless";
+                if (hasUnmappablePqv(x)) {
+                    logSkipUnsupportedVlessMlkemMapping("clash", x, "pqv");
+                    continue;
+                }
                 singleproxy["uuid"] = x.UserId;
                 singleproxy["tls"] = x.TLSSecure;
                 if (!x.AlpnList.empty()) {
@@ -1409,6 +1427,7 @@ std::string proxyToSingle(std::vector<Proxy> &nodes, int types, extra_settings &
                         ProtocolParam, &flow = x.Flow, &pbk = x.PublicKey, &sid = x.ShortId, &fp = x.Fingerprint,
                 &packet_encoding = x.PacketEncoding, &fake_type = x.FakeType, &mode = x.GRPCMode,
                 &xhttp_mode = x.XHTTPMode,
+                &encryption = x.Encryption, &pqv = x.PQV,
                 &obfs = x.OBFS, &obfsparam = x.OBFSParam, &obfsPassword = x.OBFSPassword, &id = x.UserId, &transproto =
                         x.TransferProtocol, &host = x.
                         Host, &tls = x.TLSStr, &path = x.Path, &faketype = x.FakeType, &ports = x.Ports;
@@ -1503,8 +1522,14 @@ std::string proxyToSingle(std::vector<Proxy> &nodes, int types, extra_settings &
                 if (!flow.empty()) {
                     proxyStr += "&flow=" + flow;
                 }
+                if (!encryption.empty()) {
+                    proxyStr += "&encryption=" + urlEncode(encryption);
+                }
                 if (!pbk.empty()) {
                     proxyStr += "&pbk=" + pbk;
+                }
+                if (!pqv.empty()) {
+                    proxyStr += "&pqv=" + urlEncode(pqv);
                 }
                 if (!sid.empty()) {
                     proxyStr += "&sid=" + sid;
@@ -3151,6 +3176,14 @@ proxyToSingBox(std::vector<Proxy> &nodes, rapidjson::Document &json,
                 break;
             }
             case ProxyType::VLESS: {
+                if (isVlessMlkemEncryption(x.Encryption)) {
+                    logSkipUnsupportedVlessMlkemMapping("sing-box", x, "encryption");
+                    continue;
+                }
+                if (hasUnmappablePqv(x)) {
+                    logSkipUnsupportedVlessMlkemMapping("sing-box", x, "pqv");
+                    continue;
+                }
                 addSingBoxCommonMembers(proxy, x, "vless", allocator);
                 proxy.AddMember("uuid", rapidjson::StringRef(x.UserId.c_str()), allocator);
                 if (!x.Encryption.empty() && x.Encryption != "none")

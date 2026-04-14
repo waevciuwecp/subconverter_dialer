@@ -134,6 +134,7 @@ struct Proxy {
     String ShortId;
     String Flow;
     String Encryption;
+    String PQV;
     bool FlowShow = false;
     tribool DisableSni;
     uint32_t UpSpeed;
