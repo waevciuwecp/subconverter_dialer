@@ -398,7 +398,7 @@ void explodeVmess(std::string vmess, Proxy &node) {
 
 void explodeVmessConf(std::string content, std::vector<Proxy> &nodes) {
     Document json;
-    rapidjson::Value nodejson, settings;
+    rapidjson::Value nodejson;
     std::string group, ps, add, port, type, id, aid, net, path, host, edge, tls, cipher, subid, sni;
     tribool udp, tfo, scv;
     int configType;
@@ -410,62 +410,219 @@ void explodeVmessConf(std::string content, std::vector<Proxy> &nodes) {
     regGetMatch(content, "((?i)tcpsettings)", 2, 0, &tcpset);
     regGetMatch(content, "((?1)wssettings)", 2, 0, &wsset);
 
-    json.Parse(content.data());
+    json.Parse<rapidjson::kParseCommentsFlag | rapidjson::kParseTrailingCommasFlag>(content.data());
     if (json.HasParseError() || !json.IsObject())
         return;
     try {
-        if (json.HasMember("outbounds")) //single config
+        if (json.HasMember("outbounds") && json["outbounds"].IsArray()) //single config
         {
-            if (json["outbounds"].Size() > 0 && json["outbounds"][0].HasMember("settings") &&
-                json["outbounds"][0]["settings"].HasMember("vnext") &&
-                json["outbounds"][0]["settings"]["vnext"].Size() > 0) {
-                Proxy node;
-                nodejson = json["outbounds"][0];
-                add = GetMember(nodejson["settings"]["vnext"][0], "address");
-                port = GetMember(nodejson["settings"]["vnext"][0], "port");
-                if (port == "0")
-                    return;
-                if (nodejson["settings"]["vnext"][0]["users"].Size()) {
-                    id = GetMember(nodejson["settings"]["vnext"][0]["users"][0], "id");
-                    aid = GetMember(nodejson["settings"]["vnext"][0]["users"][0], "alterId");
-                    cipher = GetMember(nodejson["settings"]["vnext"][0]["users"][0], "security");
+            auto getStringOrFirstArrayString = [](const rapidjson::Value &value, const std::string &member) -> std::string {
+                if (!value.IsObject() || !value.HasMember(member.data()))
+                    return "";
+                const rapidjson::Value &target = value[member.data()];
+                if (target.IsString())
+                    return target.GetString();
+                if (target.IsArray() && !target.Empty() && target[0].IsString())
+                    return target[0].GetString();
+                return "";
+            };
+
+            for (const auto &outbound: json["outbounds"].GetArray()) {
+                if (!outbound.IsObject() || !outbound.HasMember("settings") || !outbound["settings"].IsObject() ||
+                    !outbound["settings"].HasMember("vnext") || !outbound["settings"]["vnext"].IsArray() ||
+                    outbound["settings"]["vnext"].Empty()) {
+                    continue;
                 }
-                if (nodejson.HasMember(streamset.data())) {
-                    net = GetMember(nodejson[streamset.data()], "network");
-                    tls = GetMember(nodejson[streamset.data()], "security");
-                    if (net == "ws") {
-                        if (nodejson[streamset.data()].HasMember(wsset.data()))
-                            settings = nodejson[streamset.data()][wsset.data()];
-                        else
-                            settings.RemoveAllMembers();
-                        path = GetMember(settings, "path");
-                        if (settings.HasMember("headers")) {
-                            host = GetMember(settings["headers"], "Host");
-                            edge = GetMember(settings["headers"], "Edge");
-                        }
-                    }
-                    if (nodejson[streamset.data()].HasMember(tcpset.data()))
-                        settings = nodejson[streamset.data()][tcpset.data()];
-                    else
-                        settings.RemoveAllMembers();
-                    if (settings.IsObject() && settings.HasMember("header")) {
-                        type = GetMember(settings["header"], "type");
-                        if (type == "http") {
-                            if (settings["header"].HasMember("request")) {
-                                if (settings["header"]["request"].HasMember("path") &&
-                                    settings["header"]["request"]["path"].Size())
-                                    settings["header"]["request"]["path"][0] >> path;
-                                if (settings["header"]["request"].HasMember("headers")) {
-                                    host = GetMember(settings["header"]["request"]["headers"], "Host");
-                                    edge = GetMember(settings["header"]["request"]["headers"], "Edge");
-                                }
+
+                const rapidjson::Value &outbound_obj = outbound;
+                std::string protocol = GetMember(outbound_obj, "protocol");
+                if (protocol != "vmess" && protocol != "vless")
+                    continue;
+
+                Proxy node;
+                std::string flow, mode, xhttp_mode, pbk, sid, fp, encryption, packet_encoding;
+                std::vector<std::string> alpnList;
+                ps.clear();
+                add.clear();
+                port.clear();
+                type.clear();
+                id.clear();
+                aid.clear();
+                net = "tcp";
+                path.clear();
+                host.clear();
+                edge.clear();
+                tls.clear();
+                cipher.clear();
+                sni.clear();
+                scv = tribool();
+
+                const rapidjson::Value &vnext0 = outbound_obj["settings"]["vnext"][0];
+                add = GetMember(vnext0, "address");
+                port = GetMember(vnext0, "port");
+                if (port == "0")
+                    continue;
+                if (vnext0.HasMember("users") && vnext0["users"].IsArray() && !vnext0["users"].Empty()) {
+                    const rapidjson::Value &user0 = vnext0["users"][0];
+                    id = GetMember(user0, "id");
+                    aid = GetMember(user0, "alterId");
+                    cipher = GetMember(user0, "security");
+                    flow = GetMember(user0, "flow");
+                    encryption = GetMember(user0, "encryption");
+                }
+                ps = GetMember(outbound_obj, "tag");
+                if (ps.empty())
+                    ps = add + ":" + port;
+
+                if (outbound_obj.HasMember(streamset.data()) && outbound_obj[streamset.data()].IsObject()) {
+                    const rapidjson::Value &stream = outbound_obj[streamset.data()];
+                    net = GetMember(stream, "network");
+                    if (net.empty())
+                        net = "tcp";
+                    tls = GetMember(stream, "security");
+
+                    if (stream.HasMember("tlsSettings") && stream["tlsSettings"].IsObject()) {
+                        const rapidjson::Value &tls_settings = stream["tlsSettings"];
+                        sni = GetMember(tls_settings, "serverName");
+                        if (sni.empty())
+                            sni = GetMember(tls_settings, "server_name");
+                        if (tls_settings.HasMember("alpn") && tls_settings["alpn"].IsArray()) {
+                            for (const auto &item: tls_settings["alpn"].GetArray()) {
+                                if (item.IsString())
+                                    alpnList.emplace_back(item.GetString());
                             }
                         }
+                        if (tls_settings.HasMember("allowInsecure") && tls_settings["allowInsecure"].IsBool()) {
+                            scv = tls_settings["allowInsecure"].GetBool();
+                        }
+                        fp = GetMember(tls_settings, "fingerprint");
+                    }
+
+                    if (stream.HasMember("realitySettings") && stream["realitySettings"].IsObject()) {
+                        const rapidjson::Value &reality_settings = stream["realitySettings"];
+                        if (tls.empty())
+                            tls = "reality";
+                        sni = GetMember(reality_settings, "serverName");
+                        if (sni.empty())
+                            sni = GetMember(reality_settings, "server_name");
+                        pbk = GetMember(reality_settings, "publicKey");
+                        sid = GetMember(reality_settings, "shortId");
+                        std::string reality_fp = GetMember(reality_settings, "fingerprint");
+                        if (!reality_fp.empty())
+                            fp = reality_fp;
+                    }
+
+                    switch (hash_(net)) {
+                        case "ws"_hash: {
+                            if (stream.HasMember(wsset.data()) && stream[wsset.data()].IsObject()) {
+                                const rapidjson::Value &ws_settings = stream[wsset.data()];
+                                path = GetMember(ws_settings, "path");
+                                if (ws_settings.HasMember("headers") && ws_settings["headers"].IsObject()) {
+                                    const rapidjson::Value &headers = ws_settings["headers"];
+                                    host = getStringOrFirstArrayString(headers, "Host");
+                                    if (host.empty())
+                                        host = getStringOrFirstArrayString(headers, "host");
+                                    edge = getStringOrFirstArrayString(headers, "Edge");
+                                }
+                            }
+                            break;
+                        }
+                        case "grpc"_hash: {
+                            if (stream.HasMember("grpcSettings") && stream["grpcSettings"].IsObject()) {
+                                const rapidjson::Value &grpc_settings = stream["grpcSettings"];
+                                path = GetMember(grpc_settings, "serviceName");
+                                host = GetMember(grpc_settings, "authority");
+                                if (host.empty())
+                                    host = getStringOrFirstArrayString(grpc_settings, "host");
+                                if (grpc_settings.HasMember("multiMode") && grpc_settings["multiMode"].IsBool()) {
+                                    mode = grpc_settings["multiMode"].GetBool() ? "multi" : "gun";
+                                } else {
+                                    mode = GetMember(grpc_settings, "mode");
+                                }
+                            }
+                            break;
+                        }
+                        case "http"_hash:
+                        case "h2"_hash: {
+                            if (stream.HasMember("httpSettings") && stream["httpSettings"].IsObject()) {
+                                const rapidjson::Value &http_settings = stream["httpSettings"];
+                                path = getStringOrFirstArrayString(http_settings, "path");
+                                host = getStringOrFirstArrayString(http_settings, "host");
+                            }
+                            break;
+                        }
+                        case "httpupgrade"_hash: {
+                            if (stream.HasMember("httpupgradeSettings") && stream["httpupgradeSettings"].IsObject()) {
+                                const rapidjson::Value &httpupgrade_settings = stream["httpupgradeSettings"];
+                                path = GetMember(httpupgrade_settings, "path");
+                                host = getStringOrFirstArrayString(httpupgrade_settings, "host");
+                            }
+                            break;
+                        }
+                        case "xhttp"_hash: {
+                            if (stream.HasMember("xhttpSettings") && stream["xhttpSettings"].IsObject()) {
+                                const rapidjson::Value &xhttp_settings = stream["xhttpSettings"];
+                                path = GetMember(xhttp_settings, "path");
+                                host = getStringOrFirstArrayString(xhttp_settings, "host");
+                                xhttp_mode = GetMember(xhttp_settings, "mode");
+                            }
+                            break;
+                        }
+                        case "splithttp"_hash: {
+                            if (stream.HasMember("splithttpSettings") && stream["splithttpSettings"].IsObject()) {
+                                const rapidjson::Value &splithttp_settings = stream["splithttpSettings"];
+                                path = GetMember(splithttp_settings, "path");
+                                host = getStringOrFirstArrayString(splithttp_settings, "host");
+                                xhttp_mode = GetMember(splithttp_settings, "mode");
+                            }
+                            break;
+                        }
+                        case "kcp"_hash: {
+                            if (stream.HasMember("kcpSettings") && stream["kcpSettings"].IsObject()) {
+                                const rapidjson::Value &kcp_settings = stream["kcpSettings"];
+                                path = GetMember(kcp_settings, "seed");
+                                if (kcp_settings.HasMember("header") && kcp_settings["header"].IsObject()) {
+                                    type = GetMember(kcp_settings["header"], "type");
+                                }
+                            }
+                            break;
+                        }
+                        case "tcp"_hash: {
+                            if (stream.HasMember(tcpset.data()) && stream[tcpset.data()].IsObject()) {
+                                const rapidjson::Value &tcp_settings = stream[tcpset.data()];
+                                if (tcp_settings.HasMember("header") && tcp_settings["header"].IsObject()) {
+                                    type = GetMember(tcp_settings["header"], "type");
+                                    if (type == "http" && tcp_settings["header"].HasMember("request") &&
+                                        tcp_settings["header"]["request"].IsObject()) {
+                                        const rapidjson::Value &request = tcp_settings["header"]["request"];
+                                        path = getStringOrFirstArrayString(request, "path");
+                                        if (request.HasMember("headers") && request["headers"].IsObject()) {
+                                            const rapidjson::Value &headers = request["headers"];
+                                            host = getStringOrFirstArrayString(headers, "Host");
+                                            edge = getStringOrFirstArrayString(headers, "Edge");
+                                        }
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                        default:
+                            break;
                     }
                 }
-                vmessConstruct(node, V2RAY_DEFAULT_GROUP, add + ":" + port, add, port, type, id, aid, net, cipher, path,
-                               host, edge, tls, "", std::vector<std::string>{}, udp, tfo, scv);
+
+                if (protocol == "vless") {
+                    packet_encoding = GetMember(outbound_obj, "packetEncoding");
+                    vlessConstruct(node, XRAY_DEFAULT_GROUP, ps, add, port, type, id, aid, net, "auto", flow, mode, path,
+                                   host, edge, tls, pbk, sid, fp, sni, alpnList, packet_encoding, encryption, udp,
+                                   tfo, scv, tribool(), "", tribool(), xhttp_mode);
+                } else {
+                    vmessConstruct(node, V2RAY_DEFAULT_GROUP, ps, add, port, type, id, aid, net,
+                                   cipher.empty() ? "auto" : cipher, path, host, edge, tls, sni, alpnList, udp, tfo, scv);
+                }
+                node.Id = index;
                 nodes.emplace_back(std::move(node));
+                index++;
             }
             return;
         }

@@ -739,3 +739,381 @@ TEST_CASE("vless sing-box export fail-closes splithttp transport")
     const rapidjson::Value *outbound = findOutboundByTag(doc, node.Remark);
     CHECK(outbound == nullptr);
 }
+
+TEST_CASE("xray jsonc vless xhttp and splithttp examples parse correctly")
+{
+    const std::string content = R"jsonc(
+{
+  "outbounds": [
+    {
+      "protocol": "vless",
+      "tag": "xhttp-out",
+      "settings": {
+        "vnext": [{
+          "address": "xhttp.example.com",
+          "port": 443,
+          "users": [{
+            "id": "11111111-1111-1111-1111-111111111111",
+            "encryption": "none",
+            "flow": ""
+          }]
+        }]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "reality",
+        "xhttpSettings": {
+          "path": "/xhttp",
+          "mode": "stream-up",
+          "host": "xhttp.host.example"
+        },
+        "realitySettings": {
+          "serverName": "reality.example.com",
+          "publicKey": "pubkey",
+          "shortId": "abcd",
+          "fingerprint": "chrome"
+        }
+      }
+    },
+    {
+      "protocol": "vless",
+      "tag": "splithttp-out",
+      "settings": {
+        "vnext": [{
+          "address": "split.example.com",
+          "port": 443,
+          "users": [{
+            "id": "22222222-2222-2222-2222-222222222222",
+            "encryption": "none"
+          }]
+        }]
+      },
+      "streamSettings": {
+        "network": "splithttp",
+        "security": "tls",
+        "splithttpSettings": {
+          "path": "/split",
+          "mode": "packet-up",
+          "host": "split.host.example"
+        },
+        "tlsSettings": {
+          "serverName": "split.example.com",
+          "alpn": ["h3"]
+        }
+      }
+    }
+  ]
+}
+)jsonc";
+
+    std::vector<Proxy> nodes;
+    REQUIRE(explodeConfContent(content, nodes) == 1);
+    REQUIRE(nodes.size() == 2);
+
+    const auto find_by_remark = [&](const std::string &remark) -> const Proxy * {
+        for (const auto &node: nodes) {
+            if (node.Remark == remark)
+                return &node;
+        }
+        return nullptr;
+    };
+
+    const Proxy *xhttp = find_by_remark("xhttp-out");
+    REQUIRE(xhttp != nullptr);
+    CHECK(xhttp->Type == ProxyType::VLESS);
+    CHECK(xhttp->TransferProtocol == "xhttp");
+    CHECK(xhttp->Path == "/xhttp");
+    CHECK(xhttp->Host == "xhttp.host.example");
+    CHECK(xhttp->XHTTPMode == "stream-up");
+    CHECK(xhttp->TLSStr == "reality");
+    CHECK(xhttp->ServerName == "reality.example.com");
+    CHECK(xhttp->PublicKey == "pubkey");
+    CHECK(xhttp->ShortId == "abcd");
+
+    const Proxy *splithttp = find_by_remark("splithttp-out");
+    REQUIRE(splithttp != nullptr);
+    CHECK(splithttp->Type == ProxyType::VLESS);
+    CHECK(splithttp->TransferProtocol == "splithttp");
+    CHECK(splithttp->Path == "/split");
+    CHECK(splithttp->Host == "split.host.example");
+    CHECK(splithttp->XHTTPMode == "packet-up");
+    CHECK(splithttp->TLSStr == "tls");
+    CHECK(splithttp->ServerName == "split.example.com");
+    REQUIRE(splithttp->AlpnList.size() == 1);
+    CHECK(splithttp->AlpnList[0] == "h3");
+}
+
+TEST_CASE("xray jsonc vless grpc example parses service and authority")
+{
+    const std::string content = R"jsonc(
+{
+  "outbounds": [
+    {
+      "protocol": "vless",
+      "tag": "grpc-out",
+      "settings": {
+        "vnext": [{
+          "address": "grpc.example.com",
+          "port": 443,
+          "users": [{
+            "id": "33333333-3333-3333-3333-333333333333",
+            "encryption": "none"
+          }]
+        }]
+      },
+      "streamSettings": {
+        "network": "grpc",
+        "security": "reality",
+        "grpcSettings": {
+          "serviceName": "my-grpc",
+          "authority": "grpc-auth.example.com",
+          "multiMode": true
+        },
+        "realitySettings": {
+          "serverName": "reality.example.com",
+          "publicKey": "pubkey",
+          "shortId": "ef01",
+          "fingerprint": "chrome"
+        }
+      }
+    }
+  ]
+}
+)jsonc";
+
+    std::vector<Proxy> nodes;
+    REQUIRE(explodeConfContent(content, nodes) == 1);
+    REQUIRE(nodes.size() == 1);
+
+    const Proxy &node = nodes[0];
+    CHECK(node.Type == ProxyType::VLESS);
+    CHECK(node.Remark == "grpc-out");
+    CHECK(node.TransferProtocol == "grpc");
+    CHECK(node.GRPCServiceName == "my-grpc");
+    CHECK(node.Host == "grpc-auth.example.com");
+    CHECK(node.GRPCMode == "multi");
+    CHECK(node.TLSStr == "reality");
+    CHECK(node.ServerName == "reality.example.com");
+}
+
+TEST_CASE("xray jsonc vless httpupgrade parses exact transport")
+{
+    const std::string content = R"jsonc(
+{
+  "outbounds": [
+    {
+      "protocol": "vless",
+      "tag": "httpupgrade-out",
+      "settings": {
+        "vnext": [{
+          "address": "hu.example.com",
+          "port": 443,
+          "users": [{
+            "id": "44444444-4444-4444-4444-444444444444",
+            "encryption": "none"
+          }]
+        }]
+      },
+      "streamSettings": {
+        "network": "httpupgrade",
+        "security": "tls",
+        "httpupgradeSettings": {
+          "path": "/upgrade",
+          "host": "hu.host.example"
+        },
+        "tlsSettings": {
+          "serverName": "hu.sni.example.com"
+        }
+      }
+    }
+  ]
+}
+)jsonc";
+
+    std::vector<Proxy> nodes;
+    REQUIRE(explodeConfContent(content, nodes) == 1);
+    REQUIRE(nodes.size() == 1);
+
+    const Proxy &node = nodes[0];
+    CHECK(node.Type == ProxyType::VLESS);
+    CHECK(node.Remark == "httpupgrade-out");
+    CHECK(node.TransferProtocol == "httpupgrade");
+    CHECK(node.Path == "/upgrade");
+    CHECK(node.Host == "hu.host.example");
+    CHECK(node.TLSStr == "tls");
+    CHECK(node.ServerName == "hu.sni.example.com");
+}
+
+TEST_CASE("xray jsonc vless classic transports parse from stream settings")
+{
+    const std::string content = R"jsonc(
+{
+  "outbounds": [
+    {
+      "protocol": "vless",
+      "tag": "tcp-out",
+      "settings": {
+        "vnext": [{
+          "address": "tcp.example.com",
+          "port": 443,
+          "users": [{ "id": "55555555-5555-5555-5555-555555555555", "encryption": "none" }]
+        }]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tcpSettings": {
+          "header": {
+            "type": "http",
+            "request": {
+              "path": ["/tcp"],
+              "headers": {
+                "Host": ["tcp.host.example"]
+              }
+            }
+          }
+        },
+        "tlsSettings": {
+          "serverName": "tcp.sni.example.com"
+        }
+      }
+    },
+    {
+      "protocol": "vless",
+      "tag": "ws-out",
+      "settings": {
+        "vnext": [{
+          "address": "ws.example.com",
+          "port": 443,
+          "users": [{ "id": "66666666-6666-6666-6666-666666666666", "encryption": "none" }]
+        }]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "wsSettings": {
+          "path": "/ws",
+          "headers": {
+            "Host": "ws.host.example"
+          }
+        },
+        "tlsSettings": {
+          "serverName": "ws.sni.example.com"
+        }
+      }
+    },
+    {
+      "protocol": "vless",
+      "tag": "http-out",
+      "settings": {
+        "vnext": [{
+          "address": "http.example.com",
+          "port": 443,
+          "users": [{ "id": "77777777-7777-7777-7777-777777777777", "encryption": "none" }]
+        }]
+      },
+      "streamSettings": {
+        "network": "http",
+        "security": "tls",
+        "httpSettings": {
+          "path": ["/http"],
+          "host": ["http.host.example"]
+        },
+        "tlsSettings": {
+          "serverName": "http.sni.example.com"
+        }
+      }
+    },
+    {
+      "protocol": "vless",
+      "tag": "h2-out",
+      "settings": {
+        "vnext": [{
+          "address": "h2.example.com",
+          "port": 443,
+          "users": [{ "id": "88888888-8888-8888-8888-888888888888", "encryption": "none" }]
+        }]
+      },
+      "streamSettings": {
+        "network": "h2",
+        "security": "tls",
+        "httpSettings": {
+          "path": ["/h2"],
+          "host": ["h2.host.example"]
+        },
+        "tlsSettings": {
+          "serverName": "h2.sni.example.com"
+        }
+      }
+    },
+    {
+      "protocol": "vless",
+      "tag": "kcp-out",
+      "settings": {
+        "vnext": [{
+          "address": "kcp.example.com",
+          "port": 443,
+          "users": [{ "id": "99999999-9999-9999-9999-999999999999", "encryption": "none" }]
+        }]
+      },
+      "streamSettings": {
+        "network": "kcp",
+        "kcpSettings": {
+          "seed": "kcp-seed",
+          "header": {
+            "type": "srtp"
+          }
+        }
+      }
+    }
+  ]
+}
+)jsonc";
+
+    std::vector<Proxy> nodes;
+    REQUIRE(explodeConfContent(content, nodes) == 1);
+    REQUIRE(nodes.size() == 5);
+
+    const auto find_by_remark = [&](const std::string &remark) -> const Proxy * {
+        for (const auto &node: nodes) {
+            if (node.Remark == remark)
+                return &node;
+        }
+        return nullptr;
+    };
+
+    const Proxy *tcp = find_by_remark("tcp-out");
+    REQUIRE(tcp != nullptr);
+    CHECK(tcp->TransferProtocol == "tcp");
+    CHECK(tcp->FakeType == "http");
+    CHECK(tcp->Path == "/tcp");
+    CHECK(tcp->Host == "tcp.host.example");
+    CHECK(tcp->ServerName == "tcp.sni.example.com");
+
+    const Proxy *ws = find_by_remark("ws-out");
+    REQUIRE(ws != nullptr);
+    CHECK(ws->TransferProtocol == "ws");
+    CHECK(ws->Path == "/ws");
+    CHECK(ws->Host == "ws.host.example");
+    CHECK(ws->ServerName == "ws.sni.example.com");
+
+    const Proxy *http = find_by_remark("http-out");
+    REQUIRE(http != nullptr);
+    CHECK(http->TransferProtocol == "http");
+    CHECK(http->Path == "/http");
+    CHECK(http->Host == "http.host.example");
+    CHECK(http->ServerName == "http.sni.example.com");
+
+    const Proxy *h2 = find_by_remark("h2-out");
+    REQUIRE(h2 != nullptr);
+    CHECK(h2->TransferProtocol == "h2");
+    CHECK(h2->Path == "/h2");
+    CHECK(h2->Host == "h2.host.example");
+    CHECK(h2->ServerName == "h2.sni.example.com");
+
+    const Proxy *kcp = find_by_remark("kcp-out");
+    REQUIRE(kcp != nullptr);
+    CHECK(kcp->TransferProtocol == "kcp");
+    CHECK(kcp->Path == "kcp-seed");
+    CHECK(kcp->FakeType == "srtp");
+}
