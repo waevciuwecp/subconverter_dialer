@@ -695,11 +695,11 @@ TEST_CASE("vless sing-box export keeps httpupgrade transport")
     CHECK(std::string((*outbound)["transport"]["path"].GetString()) == "/up");
 }
 
-TEST_CASE("vless clash export fail-closes xhttp transport")
+TEST_CASE("vless clash export keeps xhttp transport")
 {
     Proxy node;
     explode("vless://aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa@example.com:443"
-            "?encryption=none&security=tls&type=xhttp&host=xhttp.example.com&path=%2Fxhttp#xhttp-clash",
+            "?encryption=none&security=tls&type=xhttp&host=xhttp.example.com&path=%2Fxhttp&mode=stream-one#xhttp-clash",
             node);
 
     REQUIRE(node.Type == ProxyType::VLESS);
@@ -713,7 +713,13 @@ TEST_CASE("vless clash export fail-closes xhttp transport")
     const std::string output = proxyToClash(nodes, "{}", rulesets, ProxyGroupConfigs{}, false, ext);
     YAML::Node root = YAML::Load(output);
     REQUIRE(root["proxies"].IsDefined());
-    CHECK(root["proxies"].size() == 0);
+    REQUIRE(root["proxies"].size() == 1);
+    YAML::Node clashNode = root["proxies"][0];
+    CHECK(clashNode["network"].as<std::string>() == "xhttp");
+    CHECK(clashNode["xhttp-opts"]["path"].as<std::string>() == "/xhttp");
+    CHECK(clashNode["xhttp-opts"]["host"].as<std::string>() == "xhttp.example.com");
+    CHECK(clashNode["xhttp-opts"]["mode"].as<std::string>() == "stream-one");
+    CHECK(clashNode["xhttp-opts"]["headers"]["Host"].as<std::string>() == "xhttp.example.com");
 }
 
 TEST_CASE("vless sing-box export fail-closes splithttp transport")

@@ -826,6 +826,17 @@ proxyToClash(std::vector<Proxy> &nodes, YAML::Node &yamlnode, const ProxyGroupCo
                         singleproxy["grpc-opts"]["grpc-service-name"] = x.GRPCServiceName;
                         break;
                     case "xhttp"_hash:
+                        singleproxy["network"] = x.TransferProtocol;
+                        singleproxy["xhttp-opts"]["path"] = x.Path.empty() ? "/" : x.Path;
+                        if (!x.Host.empty()) {
+                            singleproxy["xhttp-opts"]["host"] = x.Host;
+                            singleproxy["xhttp-opts"]["headers"]["Host"] = x.Host;
+                        }
+                        if (!x.Edge.empty())
+                            singleproxy["xhttp-opts"]["headers"]["Edge"] = x.Edge;
+                        if (!x.XHTTPMode.empty())
+                            singleproxy["xhttp-opts"]["mode"] = x.XHTTPMode;
+                        break;
                     case "httpupgrade"_hash:
                     case "splithttp"_hash:
                         logSkipUnsupportedVlessTransport("clash", x);
