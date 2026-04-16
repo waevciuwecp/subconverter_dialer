@@ -141,9 +141,9 @@
 
 注意：
 
-1.  Shadowrocket 用户建议优先使用 `ss`、`ssr`、`v2ray` 参数。  
-    `target=clash` 在 Shadowrocket 中并非完全兼容（尤其是较新的 VLESS 传输和后量子字段），可能出现“可导入但运行失败”。  
-    `target=auto` 可能映射到 `mixed`，而 `mixed` 也可能包含当前 Shadowrocket 版本或服务端方言不兼容的节点。
+1.  Shadowrocket 用户建议优先使用 `mixed` 参数，`target=clash` 在很多场景下也可兼容。  
+    已知兼容性缺口：部分 VLESS 后量子节点在 Shadowrocket 中，`flow=xtls-rprx-vision` 可能失败，而相同加密在 `flow=none` 下可用。  
+    `target=auto` 会按 User-Agent 自动映射，仍可能输出当前 Shadowrocket 版本或服务端方言不兼容的节点形态。
 
 2.  类 TG 代理的 HTTP/Socks 链接由于没有命名设定，所以可以在后方插入`&remarks=`进行命名，同时也可以插入 `&group=` 设置组别名称，以上两个参数需要经过 [URLEncode](https://www.urlencoder.org/) 处理，例如
 

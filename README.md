@@ -78,9 +78,9 @@ services:
 
 Notice:
 
-1. Shadowrocket users should prefer `ss`, `ssr` or `v2ray` as target.
-   `target=clash` is not fully compatible in Shadowrocket (especially for newer VLESS variants such as xhttp/httpupgrade/splithttp and post-quantum fields), and may import but fail at runtime.
-   `target=auto` may resolve to `mixed`, which can also include nodes unsupported by your Shadowrocket version or server/client dialect.
+1. Shadowrocket users should prefer `mixed` as target. `target=clash` is also compatible for many cases.
+   Known gap: for some VLESS post-quantum nodes in Shadowrocket, `flow=xtls-rprx-vision` may fail while `flow=none` works with the same encryption.
+   `target=auto` maps by User-Agent and may still output node variants unsupported by your Shadowrocket version or server/client dialect.
 
 2. You can add `&remark=` to Telegram-liked HTTP/Socks 5 links to set a remark for this node. For example:
 
