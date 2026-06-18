@@ -84,6 +84,32 @@ bool shouldSkipVlessStrictMapping(const std::string &target, const Proxy &proxy,
     return false;
 }
 
+static tribool resolveLegacySkipCertVerify(const Proxy &proxy, const extra_settings &ext)
+{
+    tribool legacy = ext.skip_cert_verify;
+    legacy.define(proxy.LegacySkipCertVerify);
+    legacy.define(proxy.AllowInsecure);
+    return legacy;
+}
+
+static std::string resolvePinnedPeerCertSha256(const Proxy &proxy, const extra_settings &ext)
+{
+    return trim(ext.pinned_peer_cert_sha256).empty() ? trim(proxy.PinnedPeerCertSha256) : trim(ext.pinned_peer_cert_sha256);
+}
+
+static std::string resolveVerifyPeerCertByName(const Proxy &proxy, const extra_settings &ext)
+{
+    return trim(ext.verify_peer_cert_by_name).empty() ? trim(proxy.VerifyPeerCertByName) : trim(ext.verify_peer_cert_by_name);
+}
+
+static void logIgnoredLegacyXrayTlsFlag(const std::string &target, const Proxy &proxy)
+{
+    writeLog(0, "Ignore deprecated insecure TLS flag for target '" + target + "' on node '" + proxy.Remark +
+                "': allowInsecure/skip-cert-verify is deprecated for Xray output and was not emitted. "
+                "Use pinnedPeerCertSha256 (pcs) or verifyPeerCertByName (vcn) when certificate pinning or "
+                "peer-name verification is required.", LOG_LEVEL_WARNING);
+}
+
 
 std::string
 vmessLinkConstruct(const std::string &remarks, const std::string &add, const std::string &port, const std::string &type,
@@ -1447,6 +1473,9 @@ std::string proxyToSingle(std::vector<Proxy> &nodes, int types, extra_settings &
         std::vector<string> alpns = x.AlpnList;
         std::string port = std::to_string(x.Port);
         std::string aid = std::to_string(x.AlterId);
+        tribool legacy_scv = resolveLegacySkipCertVerify(x, ext);
+        const std::string pinned_peer_cert_sha256 = resolvePinnedPeerCertSha256(x, ext);
+        const std::string verify_peer_cert_by_name = resolveVerifyPeerCertByName(x, ext);
         switch (x.Type) {
             case ProxyType::Shadowsocks:
                 if (ss) {
@@ -1488,6 +1517,8 @@ std::string proxyToSingle(std::vector<Proxy> &nodes, int types, extra_settings &
             case ProxyType::VMess:
                 if (!vmess)
                     continue;
+                if (tlssecure && legacy_scv)
+                    logIgnoredLegacyXrayTlsFlag("v2ray", x);
                 proxyStr = "vmess://" + base64Encode(
                                vmessLinkConstruct(remark, hostname, port, faketype, id, aid, transproto, path, host,
                                                   tlssecure ? "tls" : ""));
@@ -1512,6 +1543,8 @@ std::string proxyToSingle(std::vector<Proxy> &nodes, int types, extra_settings &
             case ProxyType::VLESS:
                 if (!vless)
                     continue;
+                if (tls == "tls" && pbk.empty() && legacy_scv)
+                    logIgnoredLegacyXrayTlsFlag("vless", x);
             // tls = getUrlArg(addition, "security");
             // net = getUrlArg(addition, "type");
             // flow = getUrlArg(addition, "flow");
@@ -1557,6 +1590,12 @@ std::string proxyToSingle(std::vector<Proxy> &nodes, int types, extra_settings &
                 }
                 if (!sni.empty()) {
                     proxyStr += "&sni=" + sni;
+                }
+                if (tls == "tls" && pbk.empty()) {
+                    if (!pinned_peer_cert_sha256.empty())
+                        proxyStr += "&pcs=" + urlEncode(pinned_peer_cert_sha256);
+                    if (!verify_peer_cert_by_name.empty())
+                        proxyStr += "&vcn=" + urlEncode(verify_peer_cert_by_name);
                 }
                 if (!transproto.empty()) {
                     proxyStr += "&type=" + transproto;
@@ -1604,13 +1643,18 @@ std::string proxyToSingle(std::vector<Proxy> &nodes, int types, extra_settings &
             case ProxyType::Trojan:
                 if (!trojan)
                     continue;
-                proxyStr = "trojan://" + password + "@" + hostname + ":" + port + "?allowInsecure=" +
-                           (x.AllowInsecure.get() ? "1" : "0");
+                if (legacy_scv)
+                    logIgnoredLegacyXrayTlsFlag("trojan", x);
+                proxyStr = "trojan://" + password + "@" + hostname + ":" + port + "?";
                 if (!sni.empty()) {
                     proxyStr += "&sni=" + sni;
                 } else if (!host.empty()) {
                     proxyStr += "&sni=" + host;
                 }
+                if (!pinned_peer_cert_sha256.empty())
+                    proxyStr += "&pcs=" + urlEncode(pinned_peer_cert_sha256);
+                if (!verify_peer_cert_by_name.empty())
+                    proxyStr += "&vcn=" + urlEncode(verify_peer_cert_by_name);
                 if (transproto == "ws") {
                     proxyStr += "&ws=1";
                     if (!path.empty())
@@ -2334,9 +2378,8 @@ void proxyToMellow(std::vector<Proxy> &nodes, INIReader &ini, std::vector<Rulese
         std::string &hostname = x.Hostname, port = std::to_string(x.Port);
 
         tfo = ext.tfo;
-        scv = ext.skip_cert_verify;
+        scv = resolveLegacySkipCertVerify(x, ext);
         tfo.define(x.TCPFastOpen);
-        scv.define(x.AllowInsecure);
 
         switch (x.Type) {
             case ProxyType::Shadowsocks:
@@ -2372,8 +2415,8 @@ void proxyToMellow(std::vector<Proxy> &nodes, INIReader &ini, std::vector<Rulese
                     if (!host.empty())
                         proxy += "&tls.servername=" + urlEncode(host);
                 }
-                if (!scv.is_undef())
-                    proxy += "&tls.allowinsecure=" + scv.get_str();
+                if (tlssecure == "true" && scv)
+                    logIgnoredLegacyXrayTlsFlag("mellow", x);
                 if (!tfo.is_undef())
                     proxy += "&sockopt.tcpfastopen=" + tfo.get_str();
                 break;

@@ -671,6 +671,111 @@ TEST_CASE("vless single export keeps xhttp type and mode")
     CHECK(plain.find("pqv=pqv-export") != std::string::npos);
 }
 
+TEST_CASE("xray tls settings parse legacy skip flag and explicit verification fields")
+{
+    const std::string content = R"jsonc(
+{
+  "outbounds": [
+    {
+      "protocol": "vless",
+      "tag": "tls-verification-out",
+      "settings": {
+        "vnext": [{
+          "address": "tls.example.com",
+          "port": 443,
+          "users": [{
+            "id": "12345678-1234-1234-1234-1234567890ab",
+            "encryption": "none"
+          }]
+        }]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "security": "tls",
+        "wsSettings": {
+          "path": "/ws"
+        },
+        "tlsSettings": {
+          "serverName": "tls.example.com",
+          "allowInsecure": true,
+          "pinnedPeerCertSha256": "AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA",
+          "verifyPeerCertByName": " example.com , api.example.com "
+        }
+      }
+    }
+  ]
+}
+)jsonc";
+
+    std::vector<Proxy> nodes;
+    REQUIRE(explodeConfContent(content, nodes) == 1);
+    REQUIRE(nodes.size() == 1);
+
+    const Proxy &node = nodes[0];
+    CHECK(node.LegacySkipCertVerify);
+    CHECK(node.AllowInsecure);
+    CHECK(node.PinnedPeerCertSha256 ==
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    CHECK(node.VerifyPeerCertByName == "example.com,api.example.com");
+}
+
+TEST_CASE("vless and trojan url inputs parse pcs and vcn aliases")
+{
+    Proxy vless_node;
+    explode("vless://11111111-1111-1111-1111-111111111111@example.com:443"
+            "?security=tls&type=ws&host=example.com&path=%2Fws&allowInsecure=1"
+            "&pcs=AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA:AA"
+            "&vcn=example.com%2Capi.example.com#vless-pcs",
+            vless_node);
+
+    REQUIRE(vless_node.Type == ProxyType::VLESS);
+    CHECK(vless_node.LegacySkipCertVerify);
+    CHECK(vless_node.PinnedPeerCertSha256 ==
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    CHECK(vless_node.VerifyPeerCertByName == "example.com,api.example.com");
+
+    Proxy trojan_node;
+    explode("trojan://password@example.com:443?sni=example.com"
+            "&pinnedPeerCertSha256=BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+            "&verifyPeerCertByName=example.com#trojan-pcs",
+            trojan_node);
+
+    REQUIRE(trojan_node.Type == ProxyType::Trojan);
+    CHECK(trojan_node.PinnedPeerCertSha256 ==
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    CHECK(trojan_node.VerifyPeerCertByName == "example.com");
+}
+
+TEST_CASE("invalid pcs input is ignored during parsing")
+{
+    Proxy node;
+    explode("vless://11111111-1111-1111-1111-111111111111@example.com:443"
+            "?security=tls&type=ws&host=example.com&path=%2Fws&pcs=1234#invalid-pcs",
+            node);
+
+    REQUIRE(node.Type == ProxyType::VLESS);
+    CHECK(node.PinnedPeerCertSha256.empty());
+}
+
+TEST_CASE("trojan single export omits allowInsecure and preserves pcs and vcn")
+{
+    Proxy node;
+    explode("trojan://password@example.com:443?sni=example.com&allowInsecure=1"
+            "&pcs=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+            "&vcn=example.com#trojan-export",
+            node);
+
+    REQUIRE(node.Type == ProxyType::Trojan);
+    std::vector<Proxy> nodes = {node};
+    extra_settings ext;
+    ext.nodelist = true;
+
+    const std::string output = proxyToSingle(nodes, 8, ext);
+    CHECK(output.find("allowInsecure") == std::string::npos);
+    CHECK(output.find("pcs=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") != std::string::npos);
+    CHECK(output.find("vcn=example.com") != std::string::npos);
+}
+
 TEST_CASE("vless sing-box export keeps httpupgrade transport")
 {
     Proxy node;

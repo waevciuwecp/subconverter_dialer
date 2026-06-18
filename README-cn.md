@@ -339,7 +339,11 @@ http://127.0.0.1:25500/sub?target=%TARGET%&url=%URL%&emoji=%EMOJI%····
 | sort_script   |  可选 | 详见下文 `sort_script`        | 用于自定义排序的js代码，需要经过 [URLEncode](https://www.urlencoder.org/) 处理，会覆盖配置文件里的设置。出于安全考虑，链接需包含正确的 `token` 参数，才会应用该设置                                                                                                |
 | script        |  可选 | true / false              | 用于生成Clash Script，默认为 false                                                                                                                                                                                  |
 | insert        |  可选 | true / false              | 用于设置是否将配置文件中的 `insert_url` 插入，默认为 true                                                                                                                                                                      |
-| scv           |  可选 | true / false              | 用于关闭 TLS 节点的证书检查，默认为 false                                                                                                                                                                                  |
+| scv           |  可选 | true / false              | 旧版 TLS 不安全校验开关，仅为兼容旧链接而保留。对于 Xray 兼容输出，后端不再自动写出 `allowInsecure`；如需显式校验证书，请改用下方 `pcs` / `pinnedPeerCertSha256` 或 `vcn` / `verifyPeerCertByName`。默认为 false。                                                                                         |
+| pcs           |  可选 | 64_hex_sha256             | 显式指定证书 SHA-256 指纹（可用逗号分隔多个值）。用于 Xray 兼容 TLS 校验，不会自动从 `scv` / `allowInsecure` / `skip-cert-verify` 推导。                                                                                                                                                |
+| pinnedPeerCertSha256 | 可选 | 64_hex_sha256             | `pcs` 的完整参数名。                                                                                                                                                                                                                                 |
+| vcn           |  可选 | example.com               | 显式指定对端证书名称（可用逗号分隔多个名称）。用于 Xray 兼容 TLS 校验。                                                                                                                                                                                                  |
+| verifyPeerCertByName | 可选 | example.com               | `vcn` 的完整参数名。                                                                                                                                                                                                                                  |
 | fdn           |  可选 | true / false              | 用于过滤目标类型不支持的节点，默认为 true                                                                                                                                                                                     |
 | expand        |  可选 | true / false              | 用于在 API 端处理或转换 Surge, QuantumultX, Clash 的规则列表，即是否将规则全文置入订阅中，默认为 true，设置为 false 则不会将规则全文写进订阅                                                                                                                |
 | append_info   |  可选 | true / false              | 用于输出包含流量或到期信息的节点, 默认为 true，设置为 false 则取消输出                                                                                                                                                                  |
@@ -353,7 +357,7 @@ http://127.0.0.1:25500/sub?target=%TARGET%&url=%URL%&emoji=%EMOJI%····
 | singbox_ver | 可选 | 1.12.0                    | Sing-box 配置版本，支持范围为 `1.12.x` 到 `1.14.x`（如 `1.12.0` / `1.13.0` / `1.14.0`）。在支持范围内，生成的 route 规则会附带 `action: route`。默认值为 `1.12.0`。                                                                                                                       |
 | proxy_providers | 可选 | %5B%7B%22name%22...%7D%5D | Clash `proxy-providers` 定义，内容为 URL 编码后的 JSON 数组（每项至少包含 `name` 与 `url`，可选 `type` `path` `interval`）。也可在外部 YAML/TOML 配置中使用 `custom.proxy_providers` / `custom.proxy-providers`。可与下方 `select-use` / `load-balance-use` 等策略组配合使用。                                      |
 | a             |  可选 | my-airport                | `/digest` 模式下的别名参数，同时作为文件名优先来源，会覆盖 `filename`。建议与 `q` 搭配使用。                                                                                                                                              |
-| q             |  可选 | eJx...                    | 打包后的查询参数，建议通过 `/digest` 接口传入。推荐使用 deflate（优先 `deflateRaw`）后再进行 base64/base64url 编码；同时兼容明文查询串（`target=...&url=...`）和 base64/base64url 明文编码。支持紧凑模式 `m=1`（短键：`t/u/c/i/e/r/d/iv/p/v/sv/dg/da`，布尔位图：`bt/bf`）。若 URL 上同时存在普通参数，则普通参数优先；文件名优先级为 `a` > `filename`，且全量参数名仍可手动编辑。                                                   |
+| q             |  可选 | eJx...                    | 打包后的查询参数，建议通过 `/digest` 接口传入。推荐使用 deflate（优先 `deflateRaw`）后再进行 base64/base64url 编码；同时兼容明文查询串（`target=...&url=...`）和 base64/base64url 明文编码。支持紧凑模式 `m=1`（短键：`t/u/c/i/e/r/d/iv/p/v/sv/dg/da/pcs/vcn`，布尔位图：`bt/bf`）。若 URL 上同时存在普通参数，则普通参数优先；文件名优先级为 `a` > `filename`，且全量参数名仍可手动编辑。                                                   |
 
 Sing-box 兼容性说明：
 
@@ -361,6 +365,18 @@ Sing-box 兼容性说明：
 - 当版本 `>=1.13.0` 时，上游已移除 WireGuard outbound，转换到 Sing-box 时会跳过 WireGuard 节点。
 - `detour` 可按 tag 指向拨号策略出站（`selector` / `urltest`），本后端会保留该行为并将 `detour` 指向拨号组 tag。
 - 当版本 `>=1.12.0` 时，已废弃的数据库规则类型（`GEOIP` / `SRC-GEOIP` / `GEOSITE`）会被跳过以避免生成无效配置；建议改用 `RULE-SET` 路由。
+
+TLS 校验迁移说明：
+
+- `scv`、源订阅里的 `allowInsecure`、`skip-cert-verify` 现在都视为旧版不安全校验控制。
+- 对于 Xray 兼容输出，后端不再自动写出 `allowInsecure`。
+- 旧参数不能自动改写成 `pcs` 或 `vcn`：前者需要真实证书 SHA-256 指纹，后者需要明确的期望证书名称。
+
+迁移示例：
+
+- 旧写法：`&scv=true`
+- 新写法：`&pcs=<64_hex_sha256_cert_fingerprint>`
+- 新写法：`&vcn=example.com`
 
 举个例子：
 

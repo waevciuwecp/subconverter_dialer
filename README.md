@@ -160,7 +160,7 @@ If normal parameters are also present in URL, they take precedence over values d
 For filename selection in `/digest`, priority is: `a` > `filename`.
 
 Compact digest mode (`m=1`) is supported in `q`:
-- Short aliases: `t->target`, `u->url`, `c->config`, `i->include`, `e->exclude`, `r->rename`, `d->dev_id`, `iv->interval`, `p->proxy_providers`, `v->ver`, `sv->singbox_ver`, `dg->dialer_group_name`, `da->apply_dialer_to`.
+- Short aliases: `t->target`, `u->url`, `c->config`, `i->include`, `e->exclude`, `r->rename`, `d->dev_id`, `iv->interval`, `p->proxy_providers`, `v->ver`, `sv->singbox_ver`, `dg->dialer_group_name`, `da->apply_dialer_to`, `pcs->pinnedPeerCertSha256`, `vcn->verifyPeerCertByName`.
 - Boolean bitsets:
   - `bt`: base36 bitmask for explicit `true`
   - `bf`: base36 bitmask for explicit `false`
@@ -168,6 +168,34 @@ Compact digest mode (`m=1`) is supported in `q`:
 - Full-length keys are still accepted for manual editing and backward compatibility.
 
 `/sub` keeps the original plain-parameter behavior.
+
+### TLS Verification Migration
+
+Legacy TLS verification controls:
+
+- `scv`
+- source-side `allowInsecure`
+- source-side `skip-cert-verify`
+
+These legacy flags are still accepted for backward compatibility, but they are treated as deprecated insecure-verification intent.
+
+For Xray-compatible outputs in this backend, deprecated insecure flags are no longer emitted automatically. They cannot be converted mechanically because:
+
+- `pinnedPeerCertSha256` / `pcs` requires the actual peer certificate SHA-256 fingerprint.
+- `verifyPeerCertByName` / `vcn` requires an explicit expected peer name.
+
+Use the new plain query parameters when you know the correct verification data:
+
+- `pcs=<64_hex_sha256_cert_fingerprint>`
+- `pinnedPeerCertSha256=<64_hex_sha256_cert_fingerprint>`
+- `vcn=example.com`
+- `verifyPeerCertByName=example.com`
+
+Migration example:
+
+- Old: `&scv=true`
+- New: `&pcs=<64_hex_sha256_cert_fingerprint>`
+- New: `&vcn=example.com`
 
 ### Dialer / Providers
 

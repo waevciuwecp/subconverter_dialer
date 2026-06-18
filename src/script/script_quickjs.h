@@ -121,6 +121,8 @@ namespace qjs
             JS_DefinePropertyValueStr(ctx, obj, "Host", JS_NewString(ctx, n.Host), JS_PROP_C_W_E);
             JS_DefinePropertyValueStr(ctx, obj, "Path", JS_NewString(ctx, n.Path), JS_PROP_C_W_E);
             JS_DefinePropertyValueStr(ctx, obj, "Edge", JS_NewString(ctx, n.Edge), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "PinnedPeerCertSha256", JS_NewString(ctx, n.PinnedPeerCertSha256), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "VerifyPeerCertByName", JS_NewString(ctx, n.VerifyPeerCertByName), JS_PROP_C_W_E);
 
             JS_DefinePropertyValueStr(ctx, obj, "QUICSecure", JS_NewString(ctx, n.QUICSecure), JS_PROP_C_W_E);
             JS_DefinePropertyValueStr(ctx, obj, "QUICSecret", JS_NewString(ctx, n.QUICSecret), JS_PROP_C_W_E);
@@ -128,6 +130,7 @@ namespace qjs
             JS_DefinePropertyValueStr(ctx, obj, "UDP", js_traits<tribool>::wrap(ctx, n.UDP), JS_PROP_C_W_E);
             JS_DefinePropertyValueStr(ctx, obj, "TCPFastOpen", js_traits<tribool>::wrap(ctx, n.TCPFastOpen), JS_PROP_C_W_E);
             JS_DefinePropertyValueStr(ctx, obj, "AllowInsecure", js_traits<tribool>::wrap(ctx, n.AllowInsecure), JS_PROP_C_W_E);
+            JS_DefinePropertyValueStr(ctx, obj, "LegacySkipCertVerify", js_traits<tribool>::wrap(ctx, n.LegacySkipCertVerify), JS_PROP_C_W_E);
             JS_DefinePropertyValueStr(ctx, obj, "TLS13", js_traits<tribool>::wrap(ctx, n.TLS13), JS_PROP_C_W_E);
 
             JS_DefinePropertyValueStr(ctx, obj, "SnellVersion", JS_NewInt32(ctx, n.SnellVersion), JS_PROP_C_W_E);
@@ -176,6 +179,8 @@ namespace qjs
             node.Host = unwrap_free<std::string>(ctx, v, "Host");
             node.Path = unwrap_free<std::string>(ctx, v, "Path");
             node.Edge = unwrap_free<std::string>(ctx, v, "Edge");
+            node.PinnedPeerCertSha256 = unwrap_free<std::string>(ctx, v, "PinnedPeerCertSha256");
+            node.VerifyPeerCertByName = unwrap_free<std::string>(ctx, v, "VerifyPeerCertByName");
 
             node.QUICSecure = unwrap_free<std::string>(ctx, v, "QUICSecure");
             node.QUICSecret = unwrap_free<std::string>(ctx, v, "QUICSecret");
@@ -183,6 +188,10 @@ namespace qjs
             node.UDP = unwrap_free<tribool>(ctx, v, "UDP");
             node.TCPFastOpen = unwrap_free<tribool>(ctx, v, "TCPFastOpen");
             node.AllowInsecure = unwrap_free<tribool>(ctx, v, "AllowInsecure");
+            node.LegacySkipCertVerify = unwrap_free<tribool>(ctx, v, "LegacySkipCertVerify");
+            if(node.LegacySkipCertVerify.is_undef())
+                node.LegacySkipCertVerify = node.AllowInsecure;
+            node.AllowInsecure = node.LegacySkipCertVerify;
             node.TLS13 = unwrap_free<tribool>(ctx, v, "TLS13");
 
             node.SnellVersion = unwrap_free<int32_t>(ctx, v, "SnellVersion");

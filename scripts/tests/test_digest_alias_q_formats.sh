@@ -39,7 +39,7 @@ s#^block_private_address_requests=.*#block_private_address_requests=false#m; \
 s#^listen=.*#listen=127.0.0.1#m; \
 s#^port=.*#port=$port#m;" "$pref_path"
 
-"$bin_path" -f "$pref_path" >"$tmp_dir/server.log" 2>&1 &
+(cd "$repo_root" && "$bin_path" -f "$pref_path") >"$tmp_dir/server.log" 2>&1 &
 server_pid="$!"
 
 for _ in $(seq 1 80); do
@@ -131,6 +131,58 @@ check_digest_ok "base64_q" "$Q_BASE64"
 check_digest_ok "deflate_q" "$Q_DEFLATE"
 check_digest_ok "compact_q" "$Q_COMPACT"
 check_digest_ok "compact_deflate_q" "$Q_COMPACT_DEFLATE"
+
+TROJAN_Q="$(
+python3 - <<'PY'
+import urllib.parse
+
+source = "trojan://password@example.com:443?sni=example.com&allowInsecure=1#digest-trojan"
+query = (
+    "m=1&t=trojan&u={}"
+    "&pcs=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "&vcn=api.example.com"
+    "&scv=true"
+).format(urllib.parse.quote(source, safe=""))
+print(query)
+PY
+)"
+
+trojan_body="$tmp_dir/trojan_digest.body"
+trojan_code="$(curl --noproxy '*' -sS -G "http://127.0.0.1:${port}/digest" \
+  --data-urlencode "q=${TROJAN_Q}" \
+  -o "$trojan_body" \
+  -w "%{http_code}")"
+
+if [[ "$trojan_code" != "200" ]]; then
+  echo "expected trojan digest alias case to return HTTP 200, got ${trojan_code}" >&2
+  cat "$tmp_dir/server.log" >&2 || true
+  cat "$trojan_body" >&2 || true
+  exit 1
+fi
+
+if ! python3 - "$trojan_body" <<'PY'
+import base64
+import pathlib
+import sys
+
+body = pathlib.Path(sys.argv[1]).read_text().strip()
+if "trojan://" in body:
+    decoded = body
+else:
+    decoded = base64.b64decode(body + "=" * ((4 - len(body) % 4) % 4)).decode("utf-8")
+
+if "allowInsecure" in decoded:
+    raise SystemExit(1)
+if "pcs=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" not in decoded:
+    raise SystemExit(1)
+if "vcn=api.example.com" not in decoded:
+    raise SystemExit(1)
+PY
+then
+  echo "expected trojan digest alias case to emit pcs/vcn and omit allowInsecure" >&2
+  cat "$trojan_body" >&2 || true
+  exit 1
+fi
 
 Q_NESTED_OUTER="$(
 PORT="$port" Q_INNER="$Q_NESTED_INNER" python3 - <<'PY'

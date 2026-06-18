@@ -60,8 +60,51 @@ void commonConstruct(Proxy &node, ProxyType type, const std::string &group, cons
     node.UDP = udp;
     node.TCPFastOpen = tfo;
     node.AllowInsecure = scv;
+    node.LegacySkipCertVerify = scv;
     node.TLS13 = tls13;
     node.UnderlyingProxy = underlying_proxy;
+}
+
+static tribool getLegacySkipCertVerifyArg(const std::string &addition, const std::string &primary_key)
+{
+    tribool legacy = getUrlArg(addition, primary_key);
+    if(legacy.is_undef())
+        legacy = getUrlArg(addition, "skip-cert-verify");
+    if(legacy.is_undef())
+        legacy = getUrlArg(addition, "scv");
+    return legacy;
+}
+
+static std::string getTlsVerificationArg(const std::string &addition, const std::string &long_key,
+                                         const std::string &short_key)
+{
+    std::string value = getUrlArg(addition, long_key);
+    if(value.empty())
+        value = getUrlArg(addition, short_key);
+    if(!value.empty())
+        value = urlDecode(value);
+    return value;
+}
+
+static void assignTlsVerificationFields(Proxy &node, const std::string &pcs_raw, const std::string &vcn_raw,
+                                        const std::string &source_tag)
+{
+    if(!pcs_raw.empty())
+    {
+        std::string normalized;
+        if(normalizeXrayPinnedPeerCertSha256(pcs_raw, normalized))
+            node.PinnedPeerCertSha256 = normalized;
+        else
+            writeLog(0, "Ignore invalid pinnedPeerCertSha256/pcs for '" + source_tag + "'.", LOG_LEVEL_WARNING);
+    }
+    if(!vcn_raw.empty())
+    {
+        std::string normalized;
+        if(normalizeXrayVerifyPeerCertByName(vcn_raw, normalized))
+            node.VerifyPeerCertByName = normalized;
+        else
+            writeLog(0, "Ignore invalid verifyPeerCertByName/vcn for '" + source_tag + "'.", LOG_LEVEL_WARNING);
+    }
 }
 
 void vmessConstruct(Proxy &node, const std::string &group, const std::string &remarks, const std::string &add,
@@ -476,6 +519,7 @@ void explodeVmessConf(std::string content, std::vector<Proxy> &nodes) {
                 if (ps.empty())
                     ps = add + ":" + port;
 
+                std::string pinned_peer_cert_sha256, verify_peer_cert_by_name;
                 if (outbound_obj.HasMember(streamset.data()) && outbound_obj[streamset.data()].IsObject()) {
                     const rapidjson::Value &stream = outbound_obj[streamset.data()];
                     net = GetMember(stream, "network");
@@ -497,6 +541,8 @@ void explodeVmessConf(std::string content, std::vector<Proxy> &nodes) {
                         if (tls_settings.HasMember("allowInsecure") && tls_settings["allowInsecure"].IsBool()) {
                             scv = tls_settings["allowInsecure"].GetBool();
                         }
+                        pinned_peer_cert_sha256 = GetMember(tls_settings, "pinnedPeerCertSha256");
+                        verify_peer_cert_by_name = GetMember(tls_settings, "verifyPeerCertByName");
                         fp = GetMember(tls_settings, "fingerprint");
                     }
 
@@ -622,6 +668,7 @@ void explodeVmessConf(std::string content, std::vector<Proxy> &nodes) {
                     vmessConstruct(node, V2RAY_DEFAULT_GROUP, ps, add, port, type, id, aid, net,
                                    cipher.empty() ? "auto" : cipher, path, host, edge, tls, sni, alpnList, udp, tfo, scv);
                 }
+                assignTlsVerificationFields(node, pinned_peer_cert_sha256, verify_peer_cert_by_name, ps);
                 node.Id = index;
                 nodes.emplace_back(std::move(node));
                 index++;
@@ -1098,7 +1145,7 @@ void explodeTrojan(std::string trojan, Proxy &node) {
         host = getUrlArg(addition, "peer");
     tfo = getUrlArg(addition, "tfo");
     fp = getUrlArg(addition, "fp");
-    scv = getUrlArg(addition, "allowInsecure");
+    scv = getLegacySkipCertVerifyArg(addition, "allowInsecure");
     group = urlDecode(getUrlArg(addition, "group"));
 
     if (getUrlArg(addition, "ws") == "1") {
@@ -1130,6 +1177,8 @@ void explodeTrojan(std::string trojan, Proxy &node) {
     }
     trojanConstruct(node, group, remark, server, port, psk, network, host, path, fp, sni, alpnList, true, tribool(),
                     tfo, scv);
+    assignTlsVerificationFields(node, getTlsVerificationArg(addition, "pinnedPeerCertSha256", "pcs"),
+                                getTlsVerificationArg(addition, "verifyPeerCertByName", "vcn"), remark);
 }
 
 void explodeVless(std::string vless, Proxy &node) {
@@ -2041,9 +2090,14 @@ void explodeStdVless(std::string vless, Proxy &node) {
     if (remarks.empty())
         remarks = add + ":" + port;
     sni = getUrlArg(addition, "sni");
+    tribool legacy_scv = getLegacySkipCertVerifyArg(addition, "allowInsecure");
     vlessConstruct(node, XRAY_DEFAULT_GROUP, remarks, add, port, type, id, aid, net, "auto", flow, mode, path, host, "",
                    tls, pbk, sid, fp, sni, alpnList, packet_encoding, encryption, tribool(), tribool(), tribool(),
                    tribool(), "", tribool(), xhttp_mode, pqv);
+    node.AllowInsecure = legacy_scv;
+    node.LegacySkipCertVerify = legacy_scv;
+    assignTlsVerificationFields(node, getTlsVerificationArg(addition, "pinnedPeerCertSha256", "pcs"),
+                                getTlsVerificationArg(addition, "verifyPeerCertByName", "vcn"), remarks);
     return;
 }
 

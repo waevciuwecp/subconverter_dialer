@@ -327,7 +327,9 @@ static const std::unordered_map<std::string, std::string> gDigestCompactAliasMap
     {"v", "ver"},
     {"sv", "singbox_ver"},
     {"dg", "dialer_group_name"},
-    {"da", "apply_dialer_to"}
+    {"da", "apply_dialer_to"},
+    {"pcs", "pinnedPeerCertSha256"},
+    {"vcn", "verifyPeerCertByName"}
 };
 
 static const std::array<DigestCompactBoolSpec, 17> gDigestCompactBoolSpecs = {{
@@ -752,6 +754,12 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
     std::string argApplyDialerTo = getUrlArg(argument, "apply_dialer_to");
     std::string argSingBoxVer = getUrlArg(argument, "singbox_ver");
     std::string argProxyProviders = getUrlArg(argument, "proxy_providers");
+    std::string argPinnedPeerCertSha256 = getUrlArg(argument, "pinnedPeerCertSha256");
+    std::string argVerifyPeerCertByName = getUrlArg(argument, "verifyPeerCertByName");
+    if(argPinnedPeerCertSha256.empty())
+        argPinnedPeerCertSha256 = getUrlArg(argument, "pcs");
+    if(argVerifyPeerCertByName.empty())
+        argVerifyPeerCertByName = getUrlArg(argument, "vcn");
 
     /// switches with default value
     tribool argUpload = getUrlArg(argument, "upload"), argEmoji = getUrlArg(argument, "emoji"), argAddEmoji = getUrlArg(
@@ -794,6 +802,18 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
     {
         *status_code = 400;
         return "Invalid proxy_providers argument!";
+    }
+    if(!argPinnedPeerCertSha256.empty() &&
+       !normalizeXrayPinnedPeerCertSha256(argPinnedPeerCertSha256, ext.pinned_peer_cert_sha256))
+    {
+        *status_code = 400;
+        return "Invalid pinnedPeerCertSha256/pcs argument!";
+    }
+    if(!argVerifyPeerCertByName.empty() &&
+       !normalizeXrayVerifyPeerCertByName(argVerifyPeerCertByName, ext.verify_peer_cert_by_name))
+    {
+        *status_code = 400;
+        return "Invalid verifyPeerCertByName/vcn argument!";
     }
 
     /// for external configuration

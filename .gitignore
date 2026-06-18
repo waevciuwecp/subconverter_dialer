@@ -9,6 +9,11 @@ scripts/yaml-cpp
 src/.DS_Store
 
 build
+build-*/
 /scripts/tests/.live_dialer_case/cache
 /scripts/tests/.live_dialer_case
 scripts/tests/live_dialer_case.sh
+
+# local draft docs moved out of repo
+docs/vless-reality-production-safe.md
+docs/vless-reality-production-safe-cn.md

@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <random>
+#include <cctype>
 
 #include "string.h"
 #include "map_extra.h"
@@ -174,6 +175,49 @@ int parseCommaKeyValue(const std::string &input, const std::string &separator, s
             result.emplace_back(kv.substr(0, eqpos), kv.substr(eqpos + 1));
     }
     return 0;
+}
+
+bool normalizeXrayPinnedPeerCertSha256(const std::string &input, std::string &normalized)
+{
+    string_array values;
+    for(const std::string &entry : split(input, ","))
+    {
+        std::string trimmed = trimWhitespace(entry, true, true);
+        if(trimmed.empty())
+            continue;
+
+        std::string compact;
+        compact.reserve(trimmed.size());
+        for(unsigned char ch : trimmed)
+        {
+            if(ch == ':')
+                continue;
+            if(!std::isxdigit(ch))
+                return false;
+            compact.push_back(static_cast<char>(std::tolower(ch)));
+        }
+        if(compact.size() != 64)
+            return false;
+        values.emplace_back(std::move(compact));
+    }
+
+    normalized = join(values, ",");
+    return true;
+}
+
+bool normalizeXrayVerifyPeerCertByName(const std::string &input, std::string &normalized)
+{
+    string_array values;
+    for(const std::string &entry : split(input, ","))
+    {
+        std::string trimmed = trimWhitespace(entry, true, true);
+        if(trimmed.empty())
+            continue;
+        values.emplace_back(std::move(trimmed));
+    }
+
+    normalized = join(values, ",");
+    return true;
 }
 
 void trimSelfOf(std::string &str, char target, bool before, bool after)

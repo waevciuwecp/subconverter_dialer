@@ -104,6 +104,7 @@ struct Proxy {
     tribool XUDP;
     tribool TCPFastOpen;
     tribool AllowInsecure;
+    tribool LegacySkipCertVerify;
     tribool TLS13;
 
     uint16_t SnellVersion = 0;
@@ -140,6 +141,8 @@ struct Proxy {
     uint32_t UpSpeed;
     uint32_t DownSpeed;
     String SNI;
+    String PinnedPeerCertSha256;
+    String VerifyPeerCertByName;
     tribool ReduceRtt;
     String UdpRelayMode = "native";
     uint16_t RequestTimeout = 15000;

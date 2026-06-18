@@ -48,6 +48,8 @@ std::string toUpper(const std::string &str);
 void processEscapeChar(std::string &str);
 void processEscapeCharReverse(std::string &str);
 int parseCommaKeyValue(const std::string &input, const std::string &separator, string_pair_array &result);
+bool normalizeXrayPinnedPeerCertSha256(const std::string &input, std::string &normalized);
+bool normalizeXrayVerifyPeerCertByName(const std::string &input, std::string &normalized);
 
 inline bool strFind(const std::string &str, const std::string &target)
 {

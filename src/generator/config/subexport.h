@@ -47,6 +47,8 @@ struct extra_settings
     tribool xudp = tribool();
     tribool skip_cert_verify = tribool();
     tribool tls13 = tribool();
+    std::string pinned_peer_cert_sha256;
+    std::string verify_peer_cert_by_name;
     bool clash_classical_ruleset = false;
     std::string sort_script;
     std::string clash_proxies_style = "flow";
