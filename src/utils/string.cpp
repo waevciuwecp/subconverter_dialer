@@ -202,7 +202,7 @@ bool normalizeXrayPinnedPeerCertSha256(const std::string &input, std::string &no
     }
 
     normalized = join(values, ",");
-    return true;
+    return !normalized.empty();
 }
 
 bool normalizeXrayVerifyPeerCertByName(const std::string &input, std::string &normalized)
@@ -217,7 +217,7 @@ bool normalizeXrayVerifyPeerCertByName(const std::string &input, std::string &no
     }
 
     normalized = join(values, ",");
-    return true;
+    return !normalized.empty();
 }
 
 void trimSelfOf(std::string &str, char target, bool before, bool after)

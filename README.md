@@ -179,6 +179,9 @@ VLESS URI import/export also preserves `support-x25519mlkem768=true|false` as a 
 
 ### TLS Verification Migration
 
+Output scope: `target=v2ray` exports VMess share links, not a complete Xray JSON configuration. VLESS and Trojan share-link exports preserve explicit `pcs` / `vcn`; VMess share-link export currently does not carry these fields. Xray JSON input parsing supports `tlsSettings.pinnedPeerCertSha256` and `tlsSettings.verifyPeerCertByName`, but that does not imply lossless round trips through every output format. No new full Xray JSON output target is introduced here.
+
+
 Legacy TLS verification controls:
 
 - `scv`

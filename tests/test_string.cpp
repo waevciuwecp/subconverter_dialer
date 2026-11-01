@@ -129,3 +129,16 @@ TEST_CASE("string UTF-8 helpers")
     const std::string truncated_multibyte("\xE2\x82", 2);
     CHECK_FALSE(isStrUTF8(truncated_multibyte));
 }
+
+TEST_CASE("xray TLS verification rejects explicitly empty lists")
+{
+    for (const std::string input : {"", "   ", ",", " , , "}) {
+        CAPTURE(input);
+        std::string normalized;
+        CHECK_FALSE(normalizeXrayPinnedPeerCertSha256(input, normalized));
+        CHECK_FALSE(normalizeXrayVerifyPeerCertByName(input, normalized));
+    }
+    std::string normalized;
+    CHECK(normalizeXrayVerifyPeerCertByName(" example.com , api.example.com ", normalized));
+    CHECK(normalized == "example.com,api.example.com");
+}

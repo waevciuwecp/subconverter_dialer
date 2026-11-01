@@ -417,7 +417,8 @@ static void applyDigestCompactDefaults(string_multimap &argument, uint64_t true_
 static bool decodePackedQuery(const std::string &packed, std::string &query)
 {
     std::string content = packed;
-    if(strFind(content, "%"))
+    // Preserve escaped separators inside values of an already decoded query.
+    if(!looksLikeQueryString(content) && strFind(content, "%"))
         content = urlDecode(content);
     if(startsWith(content, "?"))
         content.erase(0, 1);
@@ -719,6 +720,8 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
         case "sssub"_hash:
         case "v2ray"_hash:
         case "trojan"_hash:
+        case "vless"_hash:
+        case "hysteria2"_hash:
         case "mixed"_hash:
             lSimpleSubscription = true;
             break;
@@ -1320,13 +1323,13 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
             break;
         case "vless"_hash:
             writeLog(0, "Generate target: vless", LOG_LEVEL_INFO);
-            output_content = proxyToSingle(nodes, 16, ext);
+            output_content = proxyToSingle(nodes, 32, ext);
             if (argUpload)
                 uploadGist("vless", argUploadPath, output_content, false);
             break;
         case "hysteria2"_hash:
             writeLog(0, "Generate target: hysteria2", LOG_LEVEL_INFO);
-            output_content = proxyToSingle(nodes, 32, ext);
+            output_content = proxyToSingle(nodes, 16, ext);
             if (argUpload)
                 uploadGist("hysteria2", argUploadPath, output_content, false);
             break;

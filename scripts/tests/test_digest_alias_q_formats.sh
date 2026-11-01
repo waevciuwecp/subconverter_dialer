@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 bin_path="${SUBCONVERTER_BIN:-$repo_root/build/subconverter}"
+base_dir="${SUBCONVERTER_BASE:-$repo_root/base}"
 
 if [[ ! -x "$bin_path" ]]; then
   echo "subconverter binary not found or not executable: $bin_path" >&2
@@ -20,12 +21,12 @@ cleanup() {
 trap cleanup EXIT
 
 pref_path="$tmp_dir/pref.ini"
-cp "$repo_root/base/pref.example.ini" "$pref_path"
+cp "$base_dir/pref.example.ini" "$pref_path"
 
 port="$((29100 + RANDOM % 700))"
-rule_base="$repo_root/base/base/all_base.tpl"
+rule_base="$base_dir/base/all_base.tpl"
 
-perl -0pi -e "s#^base_path=.*#base_path=$repo_root/base#m; \
+perl -0pi -e "s#^base_path=.*#base_path=$base_dir#m; \
 s#^clash_rule_base=.*#clash_rule_base=$rule_base#m; \
 s#^surge_rule_base=.*#surge_rule_base=$rule_base#m; \
 s#^surfboard_rule_base=.*#surfboard_rule_base=$rule_base#m; \
@@ -242,5 +243,60 @@ if [[ "$bad_code" != "400" ]]; then
   cat "$tmp_dir/bad.body" >&2 || true
   exit 1
 fi
+
+# Exercise the HTTP target dispatch, not just proxyToSingle's protocol bitmask.
+python3 - "$port" <<'PYTEST'
+import base64
+import urllib.error
+import urllib.parse
+import urllib.request
+import sys
+
+base = "http://127.0.0.1:" + sys.argv[1]
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+vless = ("vless://aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa@example.com:443"
+         "?security=tls&type=tcp&allowInsecure=1#vless-api")
+hy2 = "hysteria2://password@example.com:443?sni=example.com#hy2-api"
+source = vless + "|" + hy2
+
+def fetch(endpoint, params):
+    url = base + endpoint + "?" + urllib.parse.urlencode(params)
+    try:
+        with opener.open(url, timeout=10) as response:
+            return response.read().decode().strip()
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode()
+        print(endpoint, params.get("target", "packed"), error.code, detail, file=sys.stderr)
+        raise
+
+def plain(body):
+    return body if "://" in body else base64.b64decode(body).decode()
+
+for endpoint in ("/sub", "/digest"):
+    for target, scheme in (("vless", "vless"), ("hysteria2", "hysteria2")):
+        params = {"target": target, "url": source, "list": "true", "scv": "true",
+                  "pcs": "AA:" * 31 + "AA", "vcn": " example.com , api.example.com "}
+        # Compact bt bit 7 is scv. Keep this existing bit position stable.
+        request = params if endpoint == "/sub" else {"q": urllib.parse.urlencode({
+            "m": "1", "t": params["target"], "u": source, "list": "true", "bt": "3k",
+            "pcs": params["pcs"], "vcn": params["vcn"]})}
+        links = plain(fetch(endpoint, request)).strip().splitlines()
+        assert len(links) == 1 and links[0].startswith(scheme + "://"), (endpoint, target, links)
+        if target == "vless":
+            assert "allowInsecure" not in links[0], links
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(links[0]).query)
+            assert query["pcs"] == ["aa" * 32], query
+            assert query["vcn"] == ["example.com,api.example.com"], query
+    for field, value in (("pcs", "1234"), ("vcn", " , ")):
+        params = {"target": "vless", "url": vless, "list": "true", field: value}
+        request = params if endpoint == "/sub" else {"q": urllib.parse.urlencode(params)}
+        try:
+            fetch(endpoint, request)
+        except urllib.error.HTTPError as error:
+            assert error.code == 400, error.code
+        else:
+            raise AssertionError((endpoint, field, "invalid verification value accepted"))
+print("PASS: /sub and /digest preserve target protocols, normalize pcs/vcn and reject invalid arguments")
+PYTEST
 
 echo "PASS: digest alias precedence, q formats, and nested digest url compatibility are correct"

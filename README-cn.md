@@ -369,6 +369,9 @@ Sing-box 兼容性说明：
 
 TLS 校验迁移说明：
 
+输出范围：`target=v2ray` 生成 VMess 分享链接，不是完整 Xray JSON 配置。VLESS/Trojan 分享链接导出可保留显式 `pcs` / `vcn`；VMess 分享链接导出目前不携带这些字段。能够解析 Xray JSON 的 `tlsSettings` 新字段，不代表所有输出格式都能无损往返。本次没有新增完整 Xray JSON 输出目标。
+
+
 - `scv`、源订阅里的 `allowInsecure`、`skip-cert-verify` 现在都视为旧版不安全校验控制。
 - 对于 Xray 兼容输出，后端不再自动写出 `allowInsecure`。
 - 旧参数不能自动改写成 `pcs` 或 `vcn`：前者需要真实证书 SHA-256 指纹，后者需要明确的期望证书名称。
