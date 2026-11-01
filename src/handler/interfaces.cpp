@@ -350,7 +350,7 @@ static const std::array<DigestCompactBoolSpec, 18> gDigestCompactBoolSpecs = {{
     {"surge.doh", false},
     {"clash.doh", false},
     {"singbox.ipv6", false},
-    {"support-x25519mlkem768", false}
+    {"support-x25519mlkem768", true}
 }};
 
 static const std::string gDigestCompactDefaultConfig =

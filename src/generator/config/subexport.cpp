@@ -819,7 +819,7 @@ proxyToClash(std::vector<Proxy> &nodes, YAML::Node &yamlnode, const ProxyGroupCo
                 if (!x.PublicKey.empty()) {
                     singleproxy["reality-opts"]["public-key"] = x.PublicKey;
                     tribool support = x.RealitySupportX25519MLKEM768;
-                    support.define(ext.reality_support_x25519mlkem768);
+                    support.define(ext.reality_support_x25519mlkem768).define(true);
                     if (!support.is_undef())
                         singleproxy["reality-opts"]["support-x25519mlkem768"] = support.get();
                 }

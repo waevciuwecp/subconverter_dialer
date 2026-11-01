@@ -1396,7 +1396,7 @@ TEST_CASE("vless REALITY MLKEM flag survives YAML and URI round trips")
             else
                 CHECK(opts["support-x25519mlkem768"].as<bool>() == (expected == "true"));
         };
-        checkOutput(setting);
+        checkOutput(setting.empty() ? "true" : setting);
         const std::string links = proxyToSingle(nodes, 32, ext);
         Proxy parsed;
         const std::string plain = links.find("vless://") != std::string::npos ? links : base64Decode(links);

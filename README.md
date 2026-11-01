@@ -171,11 +171,11 @@ Compact digest mode (`m=1`) is supported in `q`:
 
 ### REALITY hybrid key exchange (Mihomo)
 
-Clash/Mihomo YAML conversions preserve explicit `reality-opts.support-x25519mlkem768: true` and `false`. Missing values remain absent, so existing subscriptions for older REALITY servers keep their behavior.
+Clash/Mihomo YAML conversions preserve explicit `reality-opts.support-x25519mlkem768: true` and `false`. Missing values default to `true` for upgraded REALITY servers.
 
-For upgraded servers that require X25519MLKEM768, append `&support-x25519mlkem768=true` to the `/sub` or `/digest` conversion URL. This supplies a default only for VLESS REALITY nodes with a public key and no explicit source value; explicit source `false` remains `false`. Use `false` to supply the older-server default. Other protocols and ordinary TLS nodes are unaffected. Keep a compatible fingerprint such as `chrome`; this option does not replace fingerprint selection or enable VLESS Encryption.
+The default applies only to VLESS REALITY nodes with a public key and no explicit source value; explicit source `false` remains `false`. For older servers, append `&support-x25519mlkem768=false` to the `/sub` or `/digest` conversion URL to change the fallback. Other protocols and ordinary TLS nodes are unaffected. Keep a compatible fingerprint such as `chrome`; this option does not replace fingerprint selection or enable VLESS Encryption.
 
-VLESS URI import/export also preserves `support-x25519mlkem768=true|false` as a converter extension. Other URI consumers may ignore this extension. Sing-box output does not receive this Mihomo-specific field.
+VLESS URI import/export also preserves `support-x25519mlkem768=true|false` as a converter extension. Other URI consumers may ignore this extension. Sing-box output does not receive this Mihomo-specific field. Older clients may ignore the field; adding it does not upgrade their handshake support, so clients without X25519MLKEM768 still need a core upgrade for newer servers.
 
 ### TLS Verification Migration
 
