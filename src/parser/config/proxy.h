@@ -133,6 +133,7 @@ struct Proxy {
     String GRPCMode;
     String XHTTPMode;
     String ShortId;
+    tribool RealitySupportX25519MLKEM768;
     String Flow;
     String Encryption;
     String PQV;

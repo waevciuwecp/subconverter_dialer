@@ -332,7 +332,7 @@ static const std::unordered_map<std::string, std::string> gDigestCompactAliasMap
     {"vcn", "verifyPeerCertByName"}
 };
 
-static const std::array<DigestCompactBoolSpec, 17> gDigestCompactBoolSpecs = {{
+static const std::array<DigestCompactBoolSpec, 18> gDigestCompactBoolSpecs = {{
     {"insert", false},
     {"emoji", true},
     {"list", false},
@@ -349,7 +349,8 @@ static const std::array<DigestCompactBoolSpec, 17> gDigestCompactBoolSpecs = {{
     {"new_name", true},
     {"surge.doh", false},
     {"clash.doh", false},
-    {"singbox.ipv6", false}
+    {"singbox.ipv6", false},
+    {"support-x25519mlkem768", false}
 }};
 
 static const std::string gDigestCompactDefaultConfig =
@@ -881,6 +882,7 @@ std::string subconverter(RESPONSE_CALLBACK_ARGS) {
     ext.udp.define(argUDP).define(global.UDPFlag);
     ext.skip_cert_verify.define(argSkipCertVerify).define(global.skipCertVerify);
     ext.tls13.define(argTLS13).define(global.TLS13Flag);
+    ext.reality_support_x25519mlkem768 = tribool(getUrlArg(argument, "support-x25519mlkem768"));
 
     ext.sort_flag = argSort.get(global.enableSort);
     argUseSortScript.define(!global.sortScript.empty());

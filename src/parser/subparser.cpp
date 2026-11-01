@@ -1704,6 +1704,8 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes) {
                 vlessConstruct(node, XRAY_DEFAULT_GROUP, ps, server, port, type, id, aid, net, "auto", flow, mode, path,
                                host, "", tls, pbk, sid, fp, sni, alpnList, packet_encoding, encryption, udp, tribool(), tribool(),
                                tribool(), underlying_proxy, v2ray_http_upgrade, "", pqv);
+                node.RealitySupportX25519MLKEM768 = tribool(safe_as<std::string>(
+                    singleproxy["reality-opts"]["support-x25519mlkem768"]));
                 break;
             case "hysteria"_hash:
                 group = HYSTERIA_DEFAULT_GROUP;
@@ -2094,6 +2096,7 @@ void explodeStdVless(std::string vless, Proxy &node) {
     vlessConstruct(node, XRAY_DEFAULT_GROUP, remarks, add, port, type, id, aid, net, "auto", flow, mode, path, host, "",
                    tls, pbk, sid, fp, sni, alpnList, packet_encoding, encryption, tribool(), tribool(), tribool(),
                    tribool(), "", tribool(), xhttp_mode, pqv);
+    node.RealitySupportX25519MLKEM768 = tribool(getUrlArg(addition, "support-x25519mlkem768"));
     node.AllowInsecure = legacy_scv;
     node.LegacySkipCertVerify = legacy_scv;
     assignTlsVerificationFields(node, getTlsVerificationArg(addition, "pinnedPeerCertSha256", "pcs"),

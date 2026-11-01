@@ -339,6 +339,7 @@ http://127.0.0.1:25500/sub?target=%TARGET%&url=%URL%&emoji=%EMOJI%····
 | sort_script   |  可选 | 详见下文 `sort_script`        | 用于自定义排序的js代码，需要经过 [URLEncode](https://www.urlencoder.org/) 处理，会覆盖配置文件里的设置。出于安全考虑，链接需包含正确的 `token` 参数，才会应用该设置                                                                                                |
 | script        |  可选 | true / false              | 用于生成Clash Script，默认为 false                                                                                                                                                                                  |
 | insert        |  可选 | true / false              | 用于设置是否将配置文件中的 `insert_url` 插入，默认为 true                                                                                                                                                                      |
+| support-x25519mlkem768 | 可选 | true / false | 为 Clash/Mihomo 输出中缺少该字段的 VLESS REALITY 节点补默认值；源节点显式值优先。新服务端可用 true，缺省不改变旧订阅行为。仅用于带公钥的 REALITY 节点。 |
 | scv           |  可选 | true / false              | 旧版 TLS 不安全校验开关，仅为兼容旧链接而保留。对于 Xray 兼容输出，后端不再自动写出 `allowInsecure`；如需显式校验证书，请改用下方 `pcs` / `pinnedPeerCertSha256` 或 `vcn` / `verifyPeerCertByName`。默认为 false。                                                                                         |
 | pcs           |  可选 | 64_hex_sha256             | 显式指定证书 SHA-256 指纹（可用逗号分隔多个值）。用于 Xray 兼容 TLS 校验，不会自动从 `scv` / `allowInsecure` / `skip-cert-verify` 推导。                                                                                                                                                |
 | pinnedPeerCertSha256 | 可选 | 64_hex_sha256             | `pcs` 的完整参数名。                                                                                                                                                                                                                                 |
@@ -1511,3 +1512,11 @@ http://127.0.0.1:25500/getruleset?type=%TYPE%&url=%URL%&group=%GROUP%
 | group | type=2时必选 | mygroup | 规则对应的策略组名，生成Quantumult X类型（type=2）时必须提供                                                                                                                  |
 
 运行 subconverter 主程序后， 按照 [调用地址 (规则转换)](#调用地址-规则转换) 的对应内容替换即可得到指定类型的规则。
+
+### REALITY 混合密钥交换兼容
+
+Clash/Mihomo YAML 的 `reality-opts.support-x25519mlkem768` 会保留显式 `true` / `false`；缺省时不自动推断服务端版本。
+
+已升级的 REALITY 服务端需要该能力时，可在 `/sub` 或 `/digest` 的转换 URL 末尾追加 `&support-x25519mlkem768=true`。这只为没有显式配置的 VLESS REALITY 节点补值，不覆盖源节点显式 `false`。仍需使用支持该能力的指纹（如 `chrome`）；它与 VLESS Encryption 是两个独立开关。
+
+VLESS URI 也支持透传同名查询参数，这是本转换器扩展，其他 URI 消费者可能忽略。Sing-box 输出不会加入这个 Mihomo 专用字段。

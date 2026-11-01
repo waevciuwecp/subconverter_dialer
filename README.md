@@ -164,10 +164,18 @@ Compact digest mode (`m=1`) is supported in `q`:
 - Boolean bitsets:
   - `bt`: base36 bitmask for explicit `true`
   - `bf`: base36 bitmask for explicit `false`
-  - bit order: `insert,emoji,list,xudp,udp,tfo,expand,scv,fdn,append_type,tls13,sort,use_dialer,new_name,surge.doh,clash.doh,singbox.ipv6`
+  - bit order: `insert,emoji,list,xudp,udp,tfo,expand,scv,fdn,append_type,tls13,sort,use_dialer,new_name,surge.doh,clash.doh,singbox.ipv6,support-x25519mlkem768`
 - Full-length keys are still accepted for manual editing and backward compatibility.
 
 `/sub` keeps the original plain-parameter behavior.
+
+### REALITY hybrid key exchange (Mihomo)
+
+Clash/Mihomo YAML conversions preserve explicit `reality-opts.support-x25519mlkem768: true` and `false`. Missing values remain absent, so existing subscriptions for older REALITY servers keep their behavior.
+
+For upgraded servers that require X25519MLKEM768, append `&support-x25519mlkem768=true` to the `/sub` or `/digest` conversion URL. This supplies a default only for VLESS REALITY nodes with a public key and no explicit source value; explicit source `false` remains `false`. Use `false` to supply the older-server default. Other protocols and ordinary TLS nodes are unaffected. Keep a compatible fingerprint such as `chrome`; this option does not replace fingerprint selection or enable VLESS Encryption.
+
+VLESS URI import/export also preserves `support-x25519mlkem768=true|false` as a converter extension. Other URI consumers may ignore this extension. Sing-box output does not receive this Mihomo-specific field.
 
 ### TLS Verification Migration
 

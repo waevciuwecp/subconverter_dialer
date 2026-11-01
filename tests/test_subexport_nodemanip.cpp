@@ -1369,3 +1369,59 @@ TEST_CASE("xray jsonc vless classic transports parse from stream settings")
     CHECK(kcp->Path == "kcp-seed");
     CHECK(kcp->FakeType == "srtp");
 }
+
+TEST_CASE("vless REALITY MLKEM flag survives YAML and URI round trips")
+{
+    for (const std::string setting : {"true", "false", ""}) {
+        CAPTURE(setting);
+        const std::string flag = setting.empty() ? "" : ", support-x25519mlkem768: " + setting;
+        const std::string input = "proxies:\n  - {name: reality, type: vless, server: example.com, port: 443, "
+            "uuid: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa, tls: true, network: tcp, "
+            "client-fingerprint: chrome, reality-opts: {public-key: test-key, short-id: abcd" + flag + "}}\n";
+        std::vector<Proxy> nodes;
+        REQUIRE(explodeConfContent(input, nodes) == 1);
+        REQUIRE(nodes.size() == 1);
+        CHECK(nodes[0].RealitySupportX25519MLKEM768.get_str() == (setting.empty() ? "undef" : setting));
+        std::vector<RulesetContent> rulesets;
+        extra_settings ext;
+        ext.enable_rule_generator = false;
+        ext.nodelist = true;
+        const auto checkOutput = [&](const std::string &expected) {
+            YAML::Node root = YAML::Load(proxyToClash(nodes, "{}", rulesets, ProxyGroupConfigs{}, false, ext));
+            REQUIRE(root["proxies"].size() == 1);
+            YAML::Node opts = root["proxies"][0]["reality-opts"];
+            CHECK(opts["public-key"].as<std::string>() == "test-key");
+            if (expected.empty())
+                CHECK_FALSE(opts["support-x25519mlkem768"].IsDefined());
+            else
+                CHECK(opts["support-x25519mlkem768"].as<bool>() == (expected == "true"));
+        };
+        checkOutput(setting);
+        const std::string links = proxyToSingle(nodes, 32, ext);
+        Proxy parsed;
+        const std::string plain = links.find("vless://") != std::string::npos ? links : base64Decode(links);
+        CAPTURE(plain);
+        explode(plain.substr(0, plain.find('\n')), parsed);
+        REQUIRE(parsed.Type == ProxyType::VLESS);
+        CHECK(parsed.RealitySupportX25519MLKEM768 == nodes[0].RealitySupportX25519MLKEM768);
+        ext.reality_support_x25519mlkem768 = true;
+        checkOutput(setting.empty() ? "true" : setting);
+        ext.reality_support_x25519mlkem768 = false;
+        checkOutput(setting.empty() ? "false" : setting);
+    }
+}
+
+TEST_CASE("REALITY MLKEM fallback does not add reality options to ordinary TLS")
+{
+    Proxy node;
+    explode("vless://aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa@example.com:443?security=tls&type=tcp#tls", node);
+    std::vector<Proxy> nodes{node};
+    std::vector<RulesetContent> rulesets;
+    extra_settings ext;
+    ext.nodelist = true;
+    ext.enable_rule_generator = false;
+    ext.reality_support_x25519mlkem768 = true;
+    YAML::Node root = YAML::Load(proxyToClash(nodes, "{}", rulesets, ProxyGroupConfigs{}, false, ext));
+    REQUIRE(root["proxies"].size() == 1);
+    CHECK_FALSE(root["proxies"][0]["reality-opts"].IsDefined());
+}

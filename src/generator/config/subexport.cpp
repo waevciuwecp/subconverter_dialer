@@ -818,6 +818,10 @@ proxyToClash(std::vector<Proxy> &nodes, YAML::Node &yamlnode, const ProxyGroupCo
                     singleproxy["skip-cert-verify"] = scv.get();
                 if (!x.PublicKey.empty()) {
                     singleproxy["reality-opts"]["public-key"] = x.PublicKey;
+                    tribool support = x.RealitySupportX25519MLKEM768;
+                    support.define(ext.reality_support_x25519mlkem768);
+                    if (!support.is_undef())
+                        singleproxy["reality-opts"]["support-x25519mlkem768"] = support.get();
                 }
                 if (!x.ServerName.empty())
                     singleproxy["servername"] = x.ServerName;
@@ -1572,6 +1576,8 @@ std::string proxyToSingle(std::vector<Proxy> &nodes, int types, extra_settings &
                 }
                 if (!pbk.empty()) {
                     proxyStr += "&pbk=" + pbk;
+                    if (!x.RealitySupportX25519MLKEM768.is_undef())
+                        proxyStr += "&support-x25519mlkem768=" + x.RealitySupportX25519MLKEM768.get_str();
                 }
                 if (!pqv.empty()) {
                     proxyStr += "&pqv=" + urlEncode(pqv);

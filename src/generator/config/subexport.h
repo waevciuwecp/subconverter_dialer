@@ -45,6 +45,7 @@ struct extra_settings
     tribool udp = tribool();
     tribool tfo = tribool();
     tribool xudp = tribool();
+    tribool reality_support_x25519mlkem768;
     tribool skip_cert_verify = tribool();
     tribool tls13 = tribool();
     std::string pinned_peer_cert_sha256;
