@@ -1424,9 +1424,9 @@ static tribool parseYamlBool(const YAML::Node &value)
     }
 }
 
-static void parseClashMultiplex(const YAML::Node &proxy, Proxy &node)
+static void parseClashMultiplex(YAML::Node &proxy, Proxy &node)
 {
-    const YAML::Node mux = proxy["smux"];
+    YAML::Node mux = proxy["smux"];
     if(!mux.IsMap())
         return;
 
@@ -1437,7 +1437,7 @@ static void parseClashMultiplex(const YAML::Node &proxy, Proxy &node)
     node.Multiplex.MaxStreams = parseYamlUint(mux["max-streams"]);
     node.Multiplex.Padding = parseYamlBool(mux["padding"]).get();
 
-    const YAML::Node brutal = mux["brutal-opts"];
+    YAML::Node brutal = mux["brutal-opts"];
     if(brutal.IsMap())
     {
         node.Multiplex.BrutalEnabled = parseYamlBool(brutal["enabled"]).get();

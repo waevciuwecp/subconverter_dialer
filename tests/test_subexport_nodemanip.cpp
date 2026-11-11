@@ -1430,7 +1430,7 @@ TEST_CASE("sing-box multiplex survives conversion through Clash Meta")
 {
     const std::string input = R"({"inbounds":[],"outbounds":[{"type":"vless","tag":"mux-vless","server":"example.com","server_port":443,"uuid":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","tls":{"enabled":true},"multiplex":{"enabled":true,"protocol":"yamux","max_connections":4,"min_streams":2,"padding":true,"brutal":{"enabled":true,"up_mbps":50,"down_mbps":100}}}],"route":{}})";
     std::vector<Proxy> nodes;
-    REQUIRE(explodeConfContent(input, nodes) == 1);
+    explodeSub(input, nodes);
     REQUIRE(nodes.size() == 1);
     CHECK(nodes[0].Multiplex.Enabled);
     CHECK(nodes[0].Multiplex.Protocol == "yamux");
@@ -1455,7 +1455,7 @@ TEST_CASE("sing-box multiplex survives conversion through Clash Meta")
     CHECK(smux["brutal-opts"]["down"].as<uint32_t>() == 100);
 
     std::vector<Proxy> converted_nodes;
-    REQUIRE(explodeConfContent(clash, converted_nodes) == 1);
+    explodeSub(clash, converted_nodes);
     const std::string singbox = proxyToSingBox(converted_nodes, "{}", rulesets, ProxyGroupConfigs{}, ext);
     rapidjson::Document doc;
     doc.Parse(singbox.c_str());
@@ -1475,13 +1475,13 @@ TEST_CASE("Clash Meta smux maps to sing-box multiplex")
 {
     const std::string input =
         "proxies:\n"
-        "  - name: mux-vmess\n"
-        "    type: vmess\n"
+        "  - name: mux-clash-vless\n"
+        "    type: vless\n"
         "    server: example.com\n"
         "    port: 443\n"
         "    uuid: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\n"
-        "    alterId: 0\n"
-        "    cipher: auto\n"
+        "    tls: true\n"
+        "    network: tcp\n"
         "    smux:\n"
         "      enabled: true\n"
         "      protocol: h2mux\n"
@@ -1491,7 +1491,7 @@ TEST_CASE("Clash Meta smux maps to sing-box multiplex")
         "        up: 75\n"
         "        down: 125\n";
     std::vector<Proxy> nodes;
-    REQUIRE(explodeConfContent(input, nodes) == 1);
+    explodeSub(input, nodes);
     REQUIRE(nodes.size() == 1);
     CHECK(nodes[0].Multiplex.Enabled);
     REQUIRE(nodes[0].Multiplex.MaxStreams.has_value());
@@ -1505,7 +1505,7 @@ TEST_CASE("Clash Meta smux maps to sing-box multiplex")
     rapidjson::Document doc;
     doc.Parse(singbox.c_str());
     REQUIRE_FALSE(doc.HasParseError());
-    const rapidjson::Value *outbound = findOutboundByTag(doc, "mux-vmess");
+    const rapidjson::Value *outbound = findOutboundByTag(doc, "mux-clash-vless");
     REQUIRE(outbound != nullptr);
     REQUIRE((*outbound)["multiplex"].IsObject());
     CHECK(std::string((*outbound)["multiplex"]["protocol"].GetString()) == "h2mux");
