@@ -102,6 +102,37 @@ static std::string resolveVerifyPeerCertByName(const Proxy &proxy, const extra_s
     return trim(ext.verify_peer_cert_by_name).empty() ? trim(proxy.VerifyPeerCertByName) : trim(ext.verify_peer_cert_by_name);
 }
 
+static bool supportsProxyMultiplex(ProxyType type)
+{
+    return type == ProxyType::Shadowsocks || type == ProxyType::VMess || type == ProxyType::VLESS ||
+           type == ProxyType::Trojan;
+}
+
+static void appendClashMultiplex(YAML::Node &proxy, const Proxy &node)
+{
+    if(!node.Multiplex.Enabled || !supportsProxyMultiplex(node.Type))
+        return;
+
+    YAML::Node mux = proxy["smux"];
+    mux["enabled"] = true;
+    if(!node.Multiplex.Protocol.empty())
+        mux["protocol"] = node.Multiplex.Protocol;
+    if(node.Multiplex.MaxConnections)
+        mux["max-connections"] = *node.Multiplex.MaxConnections;
+    if(node.Multiplex.MinStreams)
+        mux["min-streams"] = *node.Multiplex.MinStreams;
+    if(node.Multiplex.MaxStreams)
+        mux["max-streams"] = *node.Multiplex.MaxStreams;
+    mux["padding"] = node.Multiplex.Padding;
+
+    if(node.Multiplex.BrutalEnabled && node.Multiplex.BrutalUpMbps && node.Multiplex.BrutalDownMbps)
+    {
+        mux["brutal-opts"]["enabled"] = true;
+        mux["brutal-opts"]["up"] = *node.Multiplex.BrutalUpMbps;
+        mux["brutal-opts"]["down"] = *node.Multiplex.BrutalDownMbps;
+    }
+}
+
 static void logIgnoredLegacyXrayTlsFlag(const std::string &target, const Proxy &proxy)
 {
     writeLog(0, "Ignore deprecated insecure TLS flag for target '" + target + "' on node '" + proxy.Remark +
@@ -908,6 +939,8 @@ proxyToClash(std::vector<Proxy> &nodes, YAML::Node &yamlnode, const ProxyGroupCo
             default:
                 continue;
         }
+
+        appendClashMultiplex(singleproxy, x);
 
         if(!x.UnderlyingProxy.empty())
             singleproxy["dialer-proxy"] = x.UnderlyingProxy;
@@ -3143,6 +3176,32 @@ static void addSingBoxCommonMembers(rapidjson::Value &proxy, const Proxy &x,
     proxy.AddMember("tag", rapidjson::StringRef(x.Remark.c_str()), allocator);
     proxy.AddMember("server", rapidjson::StringRef(x.Hostname.c_str()), allocator);
     proxy.AddMember("server_port", x.Port, allocator);
+
+    if(!x.Multiplex.Enabled || !supportsProxyMultiplex(x.Type))
+        return;
+
+    rapidjson::Value mux(rapidjson::kObjectType);
+    mux.AddMember("enabled", true, allocator);
+    if(!x.Multiplex.Protocol.empty())
+        mux.AddMember("protocol", rapidjson::Value(x.Multiplex.Protocol.c_str(), allocator).Move(), allocator);
+    if(x.Multiplex.MaxConnections)
+        mux.AddMember("max_connections", *x.Multiplex.MaxConnections, allocator);
+    if(x.Multiplex.MinStreams)
+        mux.AddMember("min_streams", *x.Multiplex.MinStreams, allocator);
+    if(x.Multiplex.MaxStreams)
+        mux.AddMember("max_streams", *x.Multiplex.MaxStreams, allocator);
+    mux.AddMember("padding", x.Multiplex.Padding, allocator);
+
+    if(x.Multiplex.BrutalEnabled && x.Multiplex.BrutalUpMbps && x.Multiplex.BrutalDownMbps)
+    {
+        rapidjson::Value brutal(rapidjson::kObjectType);
+        brutal.AddMember("enabled", true, allocator);
+        brutal.AddMember("up_mbps", *x.Multiplex.BrutalUpMbps, allocator);
+        brutal.AddMember("down_mbps", *x.Multiplex.BrutalDownMbps, allocator);
+        mux.AddMember("brutal", brutal, allocator);
+    }
+
+    proxy.AddMember("multiplex", mux, allocator);
 }
 
 static void addHeaders(rapidjson::Value &transport, const Proxy &x,

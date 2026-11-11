@@ -1425,3 +1425,91 @@ TEST_CASE("REALITY MLKEM fallback does not add reality options to ordinary TLS")
     REQUIRE(root["proxies"].size() == 1);
     CHECK_FALSE(root["proxies"][0]["reality-opts"].IsDefined());
 }
+
+TEST_CASE("sing-box multiplex survives conversion through Clash Meta")
+{
+    const std::string input = R"({"inbounds":[],"outbounds":[{"type":"vless","tag":"mux-vless","server":"example.com","server_port":443,"uuid":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","tls":{"enabled":true},"multiplex":{"enabled":true,"protocol":"yamux","max_connections":4,"min_streams":2,"padding":true,"brutal":{"enabled":true,"up_mbps":50,"down_mbps":100}}}],"route":{}})";
+    std::vector<Proxy> nodes;
+    REQUIRE(explodeConfContent(input, nodes) == 1);
+    REQUIRE(nodes.size() == 1);
+    CHECK(nodes[0].Multiplex.Enabled);
+    CHECK(nodes[0].Multiplex.Protocol == "yamux");
+    REQUIRE(nodes[0].Multiplex.MaxConnections.has_value());
+    CHECK(*nodes[0].Multiplex.MaxConnections == 4);
+
+    std::vector<RulesetContent> rulesets;
+    extra_settings ext;
+    ext.enable_rule_generator = false;
+    ext.nodelist = true;
+    const std::string clash = proxyToClash(nodes, "{}", rulesets, ProxyGroupConfigs{}, false, ext);
+    YAML::Node clash_root = YAML::Load(clash);
+    REQUIRE(clash_root["proxies"].size() == 1);
+    const YAML::Node smux = clash_root["proxies"][0]["smux"];
+    REQUIRE(smux.IsMap());
+    CHECK(smux["enabled"].as<bool>());
+    CHECK(smux["protocol"].as<std::string>() == "yamux");
+    CHECK(smux["max-connections"].as<uint32_t>() == 4);
+    CHECK(smux["min-streams"].as<uint32_t>() == 2);
+    CHECK(smux["padding"].as<bool>());
+    CHECK(smux["brutal-opts"]["up"].as<uint32_t>() == 50);
+    CHECK(smux["brutal-opts"]["down"].as<uint32_t>() == 100);
+
+    std::vector<Proxy> converted_nodes;
+    REQUIRE(explodeConfContent(clash, converted_nodes) == 1);
+    const std::string singbox = proxyToSingBox(converted_nodes, "{}", rulesets, ProxyGroupConfigs{}, ext);
+    rapidjson::Document doc;
+    doc.Parse(singbox.c_str());
+    REQUIRE_FALSE(doc.HasParseError());
+    const rapidjson::Value *outbound = findOutboundByTag(doc, "mux-vless");
+    REQUIRE(outbound != nullptr);
+    REQUIRE((*outbound)["multiplex"].IsObject());
+    CHECK(std::string((*outbound)["multiplex"]["protocol"].GetString()) == "yamux");
+    CHECK((*outbound)["multiplex"]["max_connections"].GetUint() == 4);
+    CHECK((*outbound)["multiplex"]["min_streams"].GetUint() == 2);
+    CHECK((*outbound)["multiplex"]["padding"].GetBool());
+    CHECK((*outbound)["multiplex"]["brutal"]["up_mbps"].GetUint() == 50);
+    CHECK((*outbound)["multiplex"]["brutal"]["down_mbps"].GetUint() == 100);
+}
+
+TEST_CASE("Clash Meta smux maps to sing-box multiplex")
+{
+    const std::string input =
+        "proxies:\n"
+        "  - name: mux-vmess\n"
+        "    type: vmess\n"
+        "    server: example.com\n"
+        "    port: 443\n"
+        "    uuid: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb\n"
+        "    alterId: 0\n"
+        "    cipher: auto\n"
+        "    smux:\n"
+        "      enabled: true\n"
+        "      protocol: h2mux\n"
+        "      max-streams: 8\n"
+        "      brutal-opts:\n"
+        "        enabled: true\n"
+        "        up: 75\n"
+        "        down: 125\n";
+    std::vector<Proxy> nodes;
+    REQUIRE(explodeConfContent(input, nodes) == 1);
+    REQUIRE(nodes.size() == 1);
+    CHECK(nodes[0].Multiplex.Enabled);
+    REQUIRE(nodes[0].Multiplex.MaxStreams.has_value());
+    CHECK(*nodes[0].Multiplex.MaxStreams == 8);
+
+    std::vector<RulesetContent> rulesets;
+    extra_settings ext;
+    ext.enable_rule_generator = false;
+    ext.nodelist = true;
+    const std::string singbox = proxyToSingBox(nodes, "{}", rulesets, ProxyGroupConfigs{}, ext);
+    rapidjson::Document doc;
+    doc.Parse(singbox.c_str());
+    REQUIRE_FALSE(doc.HasParseError());
+    const rapidjson::Value *outbound = findOutboundByTag(doc, "mux-vmess");
+    REQUIRE(outbound != nullptr);
+    REQUIRE((*outbound)["multiplex"].IsObject());
+    CHECK(std::string((*outbound)["multiplex"]["protocol"].GetString()) == "h2mux");
+    CHECK((*outbound)["multiplex"]["max_streams"].GetUint() == 8);
+    CHECK((*outbound)["multiplex"]["brutal"]["up_mbps"].GetUint() == 75);
+    CHECK((*outbound)["multiplex"]["brutal"]["down_mbps"].GetUint() == 125);
+}
