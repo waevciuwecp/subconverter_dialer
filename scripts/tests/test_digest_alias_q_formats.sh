@@ -120,7 +120,7 @@ check_digest_ok() {
   fi
 
   tr -d '\r' < "$header_file" > "${header_file}.norm"
-  if ! rg -n 'Content-Disposition: attachment; filename="new-name"' "${header_file}.norm" >/dev/null; then
+  if ! grep -F -n 'Content-Disposition: attachment; filename="new-name"' "${header_file}.norm" >/dev/null; then
     echo "expected alias override Content-Disposition filename for ${case_name}" >&2
     cat "${header_file}.norm" >&2 || true
     exit 1

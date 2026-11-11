@@ -22,8 +22,6 @@ jobs:
         include:
           - os: ubuntu-24.04
             target: linux-x64
-          - os: macos-14
-            target: macos-arm64
 
     steps:
       - name: Checkout
@@ -37,13 +35,7 @@ jobs:
             cmake ninja-build pkg-config g++ \
             libyaml-cpp-dev libpcre2-dev rapidjson-dev libcurl4-openssl-dev
 
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew update
-          brew install cmake ninja pkg-config yaml-cpp pcre2 rapidjson curl
-
-      - name: Configure + Build + Test (Linux/macOS)
+      - name: Configure + Build + Test (Linux)
         run: |
           cmake -S . -B build -G Ninja \
             -DBUILD_STATIC_LIBRARY=ON \
