@@ -1396,6 +1396,56 @@ void explodeNetch(std::string netch, Proxy &node) {
     }
 }
 
+static std::optional<uint32_t> parseYamlUint(const YAML::Node &value)
+{
+    if(!value.IsDefined() || value.IsNull())
+        return std::nullopt;
+    try
+    {
+        return value.as<uint32_t>();
+    }
+    catch(const YAML::Exception &)
+    {
+        return std::nullopt;
+    }
+}
+
+static tribool parseYamlBool(const YAML::Node &value)
+{
+    if(!value.IsScalar())
+        return tribool();
+    try
+    {
+        return tribool(value.as<std::string>());
+    }
+    catch(const YAML::Exception &)
+    {
+        return tribool();
+    }
+}
+
+static void parseClashMultiplex(YAML::Node &proxy, Proxy &node)
+{
+    YAML::Node mux = proxy["smux"];
+    if(!mux.IsMap())
+        return;
+
+    node.Multiplex.Enabled = parseYamlBool(mux["enabled"]).get();
+    mux["protocol"] >>= node.Multiplex.Protocol;
+    node.Multiplex.MaxConnections = parseYamlUint(mux["max-connections"]);
+    node.Multiplex.MinStreams = parseYamlUint(mux["min-streams"]);
+    node.Multiplex.MaxStreams = parseYamlUint(mux["max-streams"]);
+    node.Multiplex.Padding = parseYamlBool(mux["padding"]).get();
+
+    YAML::Node brutal = mux["brutal-opts"];
+    if(brutal.IsMap())
+    {
+        node.Multiplex.BrutalEnabled = parseYamlBool(brutal["enabled"]).get();
+        node.Multiplex.BrutalUpMbps = parseYamlUint(brutal["up"]);
+        node.Multiplex.BrutalDownMbps = parseYamlUint(brutal["down"]);
+    }
+}
+
 void explodeClash(Node yamlnode, std::vector<Proxy> &nodes) {
     Node singleproxy;
     uint32_t index = nodes.size();
@@ -1822,6 +1872,7 @@ void explodeClash(Node yamlnode, std::vector<Proxy> &nodes) {
                 continue;
         }
 
+        parseClashMultiplex(singleproxy, node);
         node.Id = index;
         nodes.emplace_back(std::move(node));
         index++;
@@ -3175,6 +3226,49 @@ void explodeSingboxTransport(rapidjson::Value &singboxNode, std::string &net, st
     }
 }
 
+static std::optional<uint32_t> parseSingBoxUint(const rapidjson::Value &object, const char *member)
+{
+    if(!object.IsObject() || !object.HasMember(member))
+        return std::nullopt;
+    const rapidjson::Value &value = object[member];
+    if(value.IsUint())
+        return value.GetUint();
+    if(value.IsInt() && value.GetInt() >= 0)
+        return static_cast<uint32_t>(value.GetInt());
+    if(value.IsUint64() && value.GetUint64() <= 0xFFFFFFFFULL)
+        return static_cast<uint32_t>(value.GetUint64());
+    if(value.IsInt64() && value.GetInt64() >= 0 && value.GetInt64() <= 0xFFFFFFFFLL)
+        return static_cast<uint32_t>(value.GetInt64());
+    return std::nullopt;
+}
+
+static bool parseSingBoxBool(const rapidjson::Value &object, const char *member)
+{
+    return object.IsObject() && object.HasMember(member) && object[member].IsBool() && object[member].GetBool();
+}
+
+static void parseSingBoxMultiplex(const rapidjson::Value &proxy, Proxy &node)
+{
+    if(!proxy.IsObject() || !proxy.HasMember("multiplex") || !proxy["multiplex"].IsObject())
+        return;
+
+    const rapidjson::Value &mux = proxy["multiplex"];
+    node.Multiplex.Enabled = parseSingBoxBool(mux, "enabled");
+    node.Multiplex.Protocol = GetMember(mux, "protocol");
+    node.Multiplex.MaxConnections = parseSingBoxUint(mux, "max_connections");
+    node.Multiplex.MinStreams = parseSingBoxUint(mux, "min_streams");
+    node.Multiplex.MaxStreams = parseSingBoxUint(mux, "max_streams");
+    node.Multiplex.Padding = parseSingBoxBool(mux, "padding");
+
+    if(mux.HasMember("brutal") && mux["brutal"].IsObject())
+    {
+        const rapidjson::Value &brutal = mux["brutal"];
+        node.Multiplex.BrutalEnabled = parseSingBoxBool(brutal, "enabled");
+        node.Multiplex.BrutalUpMbps = parseSingBoxUint(brutal, "up_mbps");
+        node.Multiplex.BrutalDownMbps = parseSingBoxUint(brutal, "down_mbps");
+    }
+}
+
 void explodeSingbox(rapidjson::Value &outbounds, std::vector<Proxy> &nodes) {
     uint32_t index = nodes.size();
     for (rapidjson::SizeType i = 0; i < outbounds.Size(); ++i) {
@@ -3446,6 +3540,7 @@ void explodeSingbox(rapidjson::Value &outbounds, std::vector<Proxy> &nodes) {
                     node.WSMaxEarlyData = ws_max_early_data;
                 if (!ws_early_data_header_name.empty())
                     node.WSEarlyDataHeaderName = ws_early_data_header_name;
+                parseSingBoxMultiplex(singboxNode, node);
                 node.Id = index;
                 nodes.emplace_back(std::move(node));
                 index++;

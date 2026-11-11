@@ -1,6 +1,7 @@
 #ifndef PROXY_H_INCLUDED
 #define PROXY_H_INCLUDED
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -8,6 +9,19 @@
 
 using String = std::string;
 using StringArray = std::vector<String>;
+
+struct MultiplexSettings
+{
+    bool Enabled = false;
+    String Protocol;
+    std::optional<uint32_t> MaxConnections;
+    std::optional<uint32_t> MinStreams;
+    std::optional<uint32_t> MaxStreams;
+    bool Padding = false;
+    bool BrutalEnabled = false;
+    std::optional<uint32_t> BrutalUpMbps;
+    std::optional<uint32_t> BrutalDownMbps;
+};
 
 enum class ProxyType
 {
@@ -152,6 +166,7 @@ struct Proxy {
     std::vector<String> AlpnList;
     String PacketEncoding;
     String Multiplexing;
+    MultiplexSettings Multiplex;
     tribool V2rayHttpUpgrade;
     uint32_t WSMaxEarlyData = 0;
     String WSEarlyDataHeaderName;
